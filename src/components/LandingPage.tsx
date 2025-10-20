@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Play, Users, Brain, TrendingUp, Star, ArrowRight, CheckCircle } from 'lucide-react';
 
-interface LandingPageProps {
-  onGetStarted: () => void;
-}
-
-export default function LandingPage({ onGetStarted }: LandingPageProps) {
+export default function LandingPage() {
+  const navigate = useNavigate();
   const [scrollY, setScrollY] = useState(0);
 
   useEffect(() => {
@@ -118,7 +116,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
               <button 
-                onClick={onGetStarted}
+                onClick={() => navigate('/home')}
                 className="group bg-gradient-to-r from-blue-500 to-emerald-400 text-white font-bold px-8 py-4 rounded-full flex items-center gap-3 hover:shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 hover:scale-105"
               >
                 <Play className="w-6 h-6" fill="white" />
@@ -273,7 +271,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
                 Join thousands of learners building real social skills
               </p>
               <button 
-                onClick={onGetStarted}
+                onClick={() => navigate('/home')}
                 className="group bg-white text-black font-bold px-10 py-5 rounded-full text-lg flex items-center gap-3 mx-auto hover:shadow-2xl hover:shadow-white/40 transition-all duration-300 hover:scale-110"
               >
                 Start Your Journey Free
