@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { getUserData, STORAGE_KEY } from './utils/storage';
 
-function SettingsScreen({ userData, darkMode, onToggleDarkMode, soundEffects, onToggleSoundEffects, onLogout }) {
+function SettingsScreen({ userData, darkMode, onToggleDarkMode, soundEffects, onToggleSoundEffects, autoReadText, onToggleAutoReadText, notifications, onToggleNotifications, onLogout }) {
   const [localDarkMode, setLocalDarkMode] = useState(darkMode);
-  const [notifications, setNotifications] = useState(true);
   const [localSoundEffects, setLocalSoundEffects] = useState(soundEffects);
+  const [localAutoReadText, setLocalAutoReadText] = useState(autoReadText);
+  const [localNotifications, setLocalNotifications] = useState(notifications);
   const [name, setName] = useState(userData?.userName || 'Alex');
   const [email, setEmail] = useState('');
 
@@ -16,6 +17,14 @@ function SettingsScreen({ userData, darkMode, onToggleDarkMode, soundEffects, on
     setLocalSoundEffects(soundEffects);
   }, [soundEffects]);
 
+  useEffect(() => {
+    setLocalAutoReadText(autoReadText);
+  }, [autoReadText]);
+
+  useEffect(() => {
+    setLocalNotifications(notifications);
+  }, [notifications]);
+
   const handleToggleDarkMode = () => {
     const newValue = !localDarkMode;
     setLocalDarkMode(newValue);
@@ -26,6 +35,18 @@ function SettingsScreen({ userData, darkMode, onToggleDarkMode, soundEffects, on
     const newValue = !localSoundEffects;
     setLocalSoundEffects(newValue);
     onToggleSoundEffects(newValue);
+  };
+
+  const handleToggleAutoReadText = () => {
+    const newValue = !localAutoReadText;
+    setLocalAutoReadText(newValue);
+    onToggleAutoReadText(newValue);
+  };
+
+  const handleToggleNotifications = () => {
+    const newValue = !localNotifications;
+    setLocalNotifications(newValue);
+    onToggleNotifications(newValue);
   };
 
   const handleSaveProfile = () => {
@@ -104,13 +125,13 @@ function SettingsScreen({ userData, darkMode, onToggleDarkMode, soundEffects, on
           </div>
           <div className={`flex items-center justify-between p-4 rounded-xl transition-colors cursor-pointer ${
             darkMode ? 'bg-white/5 hover:bg-white/10' : 'bg-gray-50 hover:bg-gray-100'
-          }`} onClick={() => setNotifications(!notifications)}>
+          }`} onClick={handleToggleNotifications}>
             <div>
               <div className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Notifications</div>
               <div className={darkMode ? 'text-sm text-gray-400' : 'text-sm text-gray-600'}>Get reminded to practice</div>
             </div>
-            <div className={`w-12 h-6 rounded-full relative transition-colors ${notifications ? 'bg-emerald-500' : 'bg-gray-400'}`}>
-              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${notifications ? 'right-1' : 'left-1'}`}></div>
+            <div className={`w-12 h-6 rounded-full relative transition-colors ${localNotifications ? 'bg-emerald-500' : 'bg-gray-400'}`}>
+              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${localNotifications ? 'right-1' : 'left-1'}`}></div>
             </div>
           </div>
           <div className={`flex items-center justify-between p-4 rounded-xl transition-colors cursor-pointer ${
@@ -122,6 +143,17 @@ function SettingsScreen({ userData, darkMode, onToggleDarkMode, soundEffects, on
             </div>
             <div className={`w-12 h-6 rounded-full relative transition-colors ${localSoundEffects ? 'bg-emerald-500' : 'bg-gray-400'}`}>
               <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${localSoundEffects ? 'right-1' : 'left-1'}`}></div>
+            </div>
+          </div>
+          <div className={`flex items-center justify-between p-4 rounded-xl transition-colors cursor-pointer ${
+            darkMode ? 'bg-white/5 hover:bg-white/10' : 'bg-gray-50 hover:bg-gray-100'
+          }`} onClick={handleToggleAutoReadText}>
+            <div>
+              <div className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Auto-Read Text</div>
+              <div className={darkMode ? 'text-sm text-gray-400' : 'text-sm text-gray-600'}>Automatically read scenarios aloud</div>
+            </div>
+            <div className={`w-12 h-6 rounded-full relative transition-colors ${localAutoReadText ? 'bg-emerald-500' : 'bg-gray-400'}`}>
+              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${localAutoReadText ? 'right-1' : 'left-1'}`}></div>
             </div>
           </div>
         </div>

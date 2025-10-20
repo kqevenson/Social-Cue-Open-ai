@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Home, Target, TrendingUp, Settings } from 'lucide-react';
-import { getUserData } from './socialcue/utils/storage';
+import { getUserData, saveUserData } from './socialcue/utils/storage';
 import HomeScreen from './socialcue/HomeScreen';
 import PracticeScreen from './socialcue/PracticeScreen';
 import ProgressScreen from './socialcue/ProgressScreen';
@@ -13,16 +13,26 @@ function SocialCueApp({ onLogout }) {
   const [userData, setUserData] = useState(null);
   const [darkMode, setDarkMode] = useState(true);
   const [soundEffects, setSoundEffects] = useState(false);
+  const [autoReadText, setAutoReadText] = useState(false);
+  const [notifications, setNotifications] = useState(true);
   const [sessionId, setSessionId] = useState(1);
 
   useEffect(() => {
     const data = getUserData();
     setUserData(data);
+    
+    // Load preferences from localStorage
     const savedDarkMode = localStorage.getItem('darkMode');
     if (savedDarkMode !== null) setDarkMode(savedDarkMode === 'true');
     
     const savedSoundEffects = localStorage.getItem('soundEffects');
     if (savedSoundEffects !== null) setSoundEffects(savedSoundEffects === 'true');
+    
+    const savedAutoReadText = localStorage.getItem('autoReadText');
+    if (savedAutoReadText !== null) setAutoReadText(savedAutoReadText === 'true');
+    
+    const savedNotifications = localStorage.getItem('notifications');
+    if (savedNotifications !== null) setNotifications(savedNotifications === 'true');
   }, []);
 
   const toggleDarkMode = (value) => {
@@ -33,6 +43,16 @@ function SocialCueApp({ onLogout }) {
   const toggleSoundEffects = (value) => {
     setSoundEffects(value);
     localStorage.setItem('soundEffects', value.toString());
+  };
+
+  const toggleAutoReadText = (value) => {
+    setAutoReadText(value);
+    localStorage.setItem('autoReadText', value.toString());
+  };
+
+  const toggleNotifications = (value) => {
+    setNotifications(value);
+    localStorage.setItem('notifications', value.toString());
   };
 
   const handleNavigate = (screen, sid) => {
@@ -60,6 +80,7 @@ function SocialCueApp({ onLogout }) {
             userData={userData} 
             onNavigate={handleNavigate} 
             darkMode={darkMode} 
+            soundEffects={soundEffects}
           />
         )}
         
@@ -69,7 +90,8 @@ function SocialCueApp({ onLogout }) {
             onNavigate={handleNavigate} 
             darkMode={darkMode} 
             gradeLevel={userData.grade || "5"} 
-            soundEffects={soundEffects} 
+            soundEffects={soundEffects}
+            autoReadText={autoReadText}
           />
         )}
         
@@ -94,6 +116,10 @@ function SocialCueApp({ onLogout }) {
             onToggleDarkMode={toggleDarkMode} 
             soundEffects={soundEffects} 
             onToggleSoundEffects={toggleSoundEffects}
+            autoReadText={autoReadText}
+            onToggleAutoReadText={toggleAutoReadText}
+            notifications={notifications}
+            onToggleNotifications={toggleNotifications}
             onLogout={onLogout}
           />
         )}

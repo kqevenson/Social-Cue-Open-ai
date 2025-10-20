@@ -27,3 +27,13 @@ export const getSessionProgress = (sessionId) => {
   const session = userData.completedSessions?.find(s => s.id === sessionId);
   return session ? (session.progress || 100) : 0;
 };
+
+export const saveUserData = (userData) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+    return true;
+  } catch (error) {
+    console.error('Error saving user data:', error);
+    return false;
+  }
+};

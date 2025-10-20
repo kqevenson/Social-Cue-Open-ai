@@ -2,7 +2,7 @@ import React from 'react';
 import { Play, Clock, Sparkles, TrendingUp, MessageCircle, Ear, Users, Zap } from 'lucide-react';
 import { getSessionProgress } from './utils/storage';
 
-function HomeScreen({ userData, onNavigate, darkMode }) {
+function HomeScreen({ userData, onNavigate, darkMode, soundEffects }) {
   const sessions = [
     { id: 1, title: 'Small Talk Mastery', subtitle: 'Break the ice with confidence', category: 'Conversation Starters', duration: '15 min', level: 'Beginner', color: '#4A90E2', icon: <MessageCircle className="w-8 h-8" /> },
     { id: 2, title: 'Active Listening', subtitle: 'Master the art of truly hearing others', category: 'Communication', duration: '20 min', level: 'Intermediate', color: '#34D399', icon: <Ear className="w-8 h-8" /> },

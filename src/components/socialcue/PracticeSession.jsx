@@ -4,14 +4,14 @@ import { getUserData, STORAGE_KEY } from './utils/storage';
 import { getGradeRange } from './utils/helpers';
 import scenarios from './utils/scenarios';
 
-function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEffects }) {
+function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEffects, autoReadText }) {
   const [currentSituation, setCurrentSituation] = useState(0);
   const [selectedOption, setSelectedOption] = useState(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const [totalPoints, setTotalPoints] = useState(0);
   const [sessionComplete, setSessionComplete] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [autoRead, setAutoRead] = useState(true);
+  const [autoRead, setAutoRead] = useState(autoReadText);
 
   const gradeRange = getGradeRange(gradeLevel);
   const scenario = scenarios[sessionId] || scenarios[1];
