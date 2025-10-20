@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import LandingPage from './landing-page/LandingPage';
+import LandingPage from './components/LandingPage';
 import OnboardingScreen from './components/OnboardingScreen';
 
 export default function SocialCueApp() {
