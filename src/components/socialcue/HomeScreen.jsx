@@ -1,8 +1,71 @@
-import React from 'react';
-import { Play, Clock, Sparkles, TrendingUp, MessageCircle, Ear, Users, Zap } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Play, Clock, Sparkles, TrendingUp, MessageCircle, Ear, Users, Zap, Loader } from 'lucide-react';
 import { getSessionProgress } from './utils/storage';
+import { getLearnerProfile, getSessionStats, getAllTopicMastery, getLessonProgressStats } from '../../firebaseHelpers';
 
 function HomeScreen({ userData, onNavigate, darkMode, soundEffects }) {
+  // Debug: Log userData to see what we're getting
+  console.log('HomeScreen userData:', userData);
+  
+  // Firebase data state
+  const [firebaseData, setFirebaseData] = useState({
+    learnerProfile: null,
+    sessionStats: null,
+    topicMastery: [],
+    lessonProgressStats: null,
+    isLoading: true,
+    error: null
+  });
+
+  // Load Firebase data on component mount
+  useEffect(() => {
+    const loadFirebaseData = async () => {
+      if (!userData?.userId) {
+        console.log('⚠️ No userId found, using localStorage data only');
+        setFirebaseData(prev => ({ ...prev, isLoading: false }));
+        return;
+      }
+
+      try {
+        console.log('🔄 Loading Firebase data for user:', userData.userId);
+        
+        // Load all Firebase data in parallel
+        const [learnerProfile, sessionStats, topicMastery, lessonProgressStats] = await Promise.all([
+          getLearnerProfile(userData.userId),
+          getSessionStats(userData.userId),
+          getAllTopicMastery(userData.userId),
+          getLessonProgressStats(userData.userId)
+        ]);
+
+        console.log('✅ Firebase data loaded:', {
+          learnerProfile,
+          sessionStats,
+          topicMastery: topicMastery.length,
+          lessonProgressStats
+        });
+
+        setFirebaseData({
+          learnerProfile,
+          sessionStats,
+          topicMastery,
+          lessonProgressStats,
+          isLoading: false,
+          error: null
+        });
+
+      } catch (error) {
+        console.error('❌ Error loading Firebase data:', error);
+        setFirebaseData(prev => ({
+          ...prev,
+          isLoading: false,
+          error: error.message
+        }));
+      }
+    };
+
+    loadFirebaseData();
+  }, [userData?.userId]);
+  
   const sessions = [
     { id: 1, title: 'Small Talk Mastery', subtitle: 'Break the ice with confidence', category: 'Conversation Starters', duration: '15 min', level: 'Beginner', color: '#4A90E2', icon: <MessageCircle className="w-8 h-8" /> },
     { id: 2, title: 'Active Listening', subtitle: 'Master the art of truly hearing others', category: 'Communication', duration: '20 min', level: 'Intermediate', color: '#34D399', icon: <Ear className="w-8 h-8" /> },
@@ -15,11 +78,44 @@ function HomeScreen({ userData, onNavigate, darkMode, soundEffects }) {
     progress: getSessionProgress(session.id)
   }));
 
-  const stats = [
-    { label: 'Day Streak', value: String(userData?.streak || 0), icon: <Sparkles className="w-5 h-5" />, gradient: 'from-emerald-500 to-emerald-600' },
-    { label: 'Sessions', value: String(userData?.totalSessions || 0), icon: <Play className="w-5 h-5" />, gradient: 'from-blue-400 to-blue-500' },
-    { label: 'Confidence', value: `${userData?.confidenceScore || 0}%`, icon: <TrendingUp className="w-5 h-5" />, gradient: 'from-purple-400 to-purple-500' }
-  ];
+  // Calculate stats from Firebase data with fallback to localStorage
+  const calculateStats = () => {
+    const { learnerProfile, sessionStats, topicMastery, lessonProgressStats } = firebaseData;
+    
+    // Calculate confidence from topic mastery average
+    const confidenceScore = topicMastery.length > 0 
+      ? Math.round(topicMastery.reduce((sum, topic) => sum + topic.percentComplete, 0) / topicMastery.length)
+      : (userData?.confidenceScore || 0);
+
+    return [
+      { 
+        label: 'Day Streak', 
+        value: String(learnerProfile?.streak || userData?.streak || 0), 
+        icon: <Sparkles className="w-5 h-5" />, 
+        gradient: 'from-emerald-500 to-emerald-600' 
+      },
+      { 
+        label: 'Sessions', 
+        value: String(sessionStats?.totalSessions || userData?.totalSessions || 0), 
+        icon: <Play className="w-5 h-5" />, 
+        gradient: 'from-blue-400 to-blue-500' 
+      },
+      { 
+        label: 'Lessons', 
+        value: String(lessonProgressStats?.completedLessons || 0), 
+        icon: <Users className="w-5 h-5" />, 
+        gradient: 'from-orange-400 to-orange-500' 
+      },
+      { 
+        label: 'Confidence', 
+        value: `${confidenceScore}%`, 
+        icon: <TrendingUp className="w-5 h-5" />, 
+        gradient: 'from-purple-400 to-purple-500' 
+      }
+    ];
+  };
+
+  const stats = calculateStats();
 
   return (
     <div className="pb-24">
@@ -87,14 +183,67 @@ function HomeScreen({ userData, onNavigate, darkMode, soundEffects }) {
 
         <section className="mb-8">
           <div className="grid grid-cols-3 gap-3">
-            {stats.map((stat, i) => (
-              <div key={i} className={`backdrop-blur-xl border rounded-2xl p-4 transition-all duration-200 text-center hover:scale-105 hover:shadow-lg animate-slideUp ${
-                darkMode ? 'bg-white/8 border-white/20 hover:bg-white/12' : 'bg-white border-gray-200 hover:bg-gray-50 shadow-sm'
-              }`} style={{ animationDelay: `${i * 100}ms` }}>
-                <div className={`text-3xl font-bold bg-gradient-to-r ${stat.gradient} bg-clip-text text-transparent mb-1`}>{stat.value}</div>
-                <div className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{stat.label}</div>
-              </div>
-            ))}
+            {firebaseData.isLoading ? (
+              // Loading state
+              Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className={`backdrop-blur-xl border rounded-2xl p-4 transition-all duration-200 text-center animate-slideUp ${
+                  darkMode ? 'bg-white/8 border-white/20' : 'bg-white border-gray-200 shadow-sm'
+                }`} style={{ animationDelay: `${i * 100}ms` }}>
+                  <div className="flex items-center justify-center mb-2">
+                    <Loader className="w-6 h-6 animate-spin text-blue-500" />
+                  </div>
+                  <div className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Loading...</div>
+                </div>
+              ))
+            ) : firebaseData.error ? (
+              // Error state - show localStorage data with error indicator
+              stats.map((stat, i) => (
+                <div key={i} className={`backdrop-blur-xl border rounded-2xl p-4 transition-all duration-200 text-center hover:scale-105 hover:shadow-lg animate-slideUp ${
+                  darkMode ? 'bg-white/8 border-white/20 hover:bg-white/12' : 'bg-white border-gray-200 hover:bg-gray-50 shadow-sm'
+                }`} style={{ animationDelay: `${i * 100}ms` }}>
+                  <div className={`text-3xl font-bold bg-gradient-to-r ${stat.gradient} bg-clip-text text-transparent mb-1`}>{stat.value}</div>
+                  <div className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{stat.label}</div>
+                  <div className="text-xs text-orange-500 mt-1">Using cached data</div>
+                </div>
+              ))
+            ) : (
+              // Normal state with Firebase data
+              stats.map((stat, i) => (
+                <div key={i} className={`backdrop-blur-xl border rounded-2xl p-4 transition-all duration-200 text-center hover:scale-105 hover:shadow-lg animate-slideUp ${
+                  darkMode ? 'bg-white/8 border-white/20 hover:bg-white/12' : 'bg-white border-gray-200 hover:bg-gray-50 shadow-sm'
+                }`} style={{ animationDelay: `${i * 100}ms` }}>
+                  <div className={`text-3xl font-bold bg-gradient-to-r ${stat.gradient} bg-clip-text text-transparent mb-1`}>{stat.value}</div>
+                  <div className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{stat.label}</div>
+                  {firebaseData.learnerProfile && (
+                    <div className="text-xs text-emerald-500 mt-1">Live data</div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+
+        {/* Smart Practice - NEW */}
+        <section className="mb-8">
+          <div className={`p-6 rounded-2xl border-2 ${
+            darkMode 
+              ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-purple-500/50' 
+              : 'bg-gradient-to-r from-purple-50 to-pink-50 border-purple-200'
+          }`}>
+            <div className="flex items-center gap-3 mb-3">
+              <Sparkles className="w-6 h-6 text-yellow-400" />
+              <h3 className="text-xl font-bold">Smart Practice</h3>
+              <span className="bg-yellow-400 text-black text-xs font-bold px-2 py-1 rounded-full">NEW</span>
+            </div>
+            <p className={`mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+              Get personalized scenarios generated just for you
+            </p>
+            <button
+              onClick={() => onNavigate('ai-practice')}
+              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-full font-bold hover:shadow-lg transition-all"
+            >
+              Try Smart Practice
+            </button>
           </div>
         </section>
 

@@ -1,0 +1,999 @@
+import dotenv from 'dotenv';
+import express from 'express';
+import cors from 'cors';
+import bodyParser from 'body-parser';
+import Anthropic from '@anthropic-ai/sdk';
+import { getTemplate, getDisplayName } from './promptTemplates.js';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, doc, getDoc, setDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
+
+dotenv.config();
+
+const app = express();
+const PORT = 3001;
+
+// Initialize Firebase
+const firebaseConfig = {
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.FIREBASE_APP_ID
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+
+// Middleware
+app.use(cors());
+app.use(bodyParser.json());
+
+// Initialize Anthropic client
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
+// Test endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'Server is running!', timestamp: new Date() });
+});
+
+// Lesson caching functions
+const generateLessonCacheKey = (topicName, gradeLevel, currentSkillLevel, learnerStrengths, learnerWeaknesses) => {
+  const strengths = learnerStrengths?.sort().join(',') || '';
+  const weaknesses = learnerWeaknesses?.sort().join(',') || '';
+  return `${(topicName || '').toLowerCase().replace(/\s+/g, '-')}-${gradeLevel}-${currentSkillLevel}-${strengths}-${weaknesses}`;
+};
+
+const getCachedLesson = async (cacheKey) => {
+  try {
+    console.log(`🔍 Checking cache for lesson: ${cacheKey}`);
+    const lessonRef = doc(db, 'ai_lessons', cacheKey);
+    const lessonSnap = await getDoc(lessonRef);
+    
+    if (lessonSnap.exists()) {
+      const cachedLesson = lessonSnap.data();
+      console.log(`✅ Found cached lesson: "${cachedLesson.lesson?.introduction?.title || 'Unknown Title'}"`);
+      return cachedLesson;
+    } else {
+      console.log(`❌ No cached lesson found for: ${cacheKey}`);
+      return null;
+    }
+  } catch (error) {
+    console.error('❌ Error checking lesson cache:', error);
+    return null;
+  }
+};
+
+const cacheLesson = async (cacheKey, lessonData, usage, costEstimate) => {
+  try {
+    console.log(`💾 Caching lesson: ${cacheKey}`);
+    const lessonRef = doc(db, 'ai_lessons', cacheKey);
+    await setDoc(lessonRef, {
+      lesson: lessonData,
+      usage,
+      costEstimate,
+      cachedAt: serverTimestamp(),
+      cacheKey
+    });
+    console.log(`✅ Lesson cached successfully`);
+  } catch (error) {
+    console.error('❌ Error caching lesson:', error);
+    // Don't throw error - caching failure shouldn't break the response
+  }
+};
+
+// Generate complete AI lesson endpoint
+app.post('/api/generate-lesson', async (req, res) => {
+  try {
+    const { topicName, gradeLevel, currentSkillLevel, learnerStrengths, learnerWeaknesses } = req.body;
+    
+    console.log(`📚 Generating AI lesson for: ${topicName}, Grade: ${gradeLevel}, Skill Level: ${currentSkillLevel}`);
+    console.log(`🎯 Strengths: ${learnerStrengths?.join(', ') || 'None specified'}`);
+    console.log(`🔧 Weaknesses: ${learnerWeaknesses?.join(', ') || 'None specified'}`);
+    
+    // Generate cache key and check for existing lesson (skip caching for now)
+    const cacheKey = generateLessonCacheKey(topicName, gradeLevel, currentSkillLevel, learnerStrengths, learnerWeaknesses);
+    console.log(`🔄 Generating new lesson (cache key: ${cacheKey})...`);
+    
+    // Age-appropriate guidelines for exact grades
+    const getGradeGuidelines = (grade) => {
+      const gradeNum = parseInt(grade);
+      
+      // Kindergarten
+      if (grade === 'K' || grade === '0') {
+        return {
+          language: 'Very simple words, short sentences (3-6 words per sentence)',
+          topics: 'sharing toys, taking turns, saying sorry, making friends, asking to play',
+          settings: 'playground, lunch table, classroom, recess, story time',
+          avoid: 'dating, complex emotions, abstract concepts, adult situations',
+          timeEstimate: '5-6 minutes',
+          exampleTitle: 'Making Friends at Recess',
+          ageContext: 'kindergartener (5-6 years old)'
+        };
+      }
+      
+      // Grades 1-2 (Early Elementary)
+      if (gradeNum >= 1 && gradeNum <= 2) {
+        return {
+          language: 'Simple words, short sentences (4-8 words per sentence)',
+          topics: 'sharing, taking turns, saying sorry, making friends, following rules',
+          settings: 'playground, lunch table, classroom, recess, reading time',
+          avoid: 'dating, complex emotions, abstract concepts, adult situations',
+          timeEstimate: '6-8 minutes',
+          exampleTitle: 'Sharing and Taking Turns',
+          ageContext: `${gradeNum === 1 ? '1st grader' : '2nd grader'} (${gradeNum === 1 ? '6-7' : '7-8'} years old)`
+        };
+      }
+      
+      // Grades 3-5 (Elementary)
+      if (gradeNum >= 3 && gradeNum <= 5) {
+        return {
+          language: 'Clear, concrete language (5-12 words per sentence)',
+          topics: 'group work, handling disagreements, including others, following rules',
+          settings: 'school projects, recess, clubs, art class, science lab',
+          avoid: 'romantic relationships, mature themes, complex social dynamics',
+          timeEstimate: '8-12 minutes',
+          exampleTitle: 'Working Together in Groups',
+          ageContext: `${gradeNum}${gradeNum === 3 ? 'rd' : gradeNum === 4 ? 'th' : 'th'} grader (${gradeNum + 5}-${gradeNum + 6} years old)`
+        };
+      }
+      
+      // Grades 6-8 (Middle School)
+      if (gradeNum >= 6 && gradeNum <= 8) {
+        return {
+          language: 'Age-appropriate teen language (8-15 words per sentence)',
+          topics: 'peer pressure, social media etiquette, conflict resolution, teamwork',
+          settings: 'middle school, group chats, lunch tables, sports teams, clubs',
+          avoid: 'adult relationships, workplace scenarios, inappropriate content',
+          timeEstimate: '10-15 minutes',
+          exampleTitle: 'Handling Peer Pressure',
+          ageContext: `${gradeNum}${gradeNum === 6 ? 'th' : gradeNum === 7 ? 'th' : 'th'} grader (${gradeNum + 5}-${gradeNum + 6} years old)`
+        };
+      }
+      
+      // Grades 9-12 (High School)
+      if (gradeNum >= 9 && gradeNum <= 12) {
+        return {
+          language: 'Mature but appropriate vocabulary (10-20 words per sentence)',
+          topics: 'leadership, conflict resolution, college prep, part-time jobs, relationships',
+          settings: 'extracurriculars, part-time jobs, college prep, clubs, school events',
+          avoid: 'inappropriate content for high schoolers, adult-only situations',
+          timeEstimate: '12-15 minutes',
+          exampleTitle: 'Building Leadership Skills',
+          ageContext: `${gradeNum}${gradeNum === 9 ? 'th' : gradeNum === 10 ? 'th' : gradeNum === 11 ? 'th' : 'th'} grader (${gradeNum + 5}-${gradeNum + 6} years old)`
+        };
+      }
+      
+      // Default fallback
+      return {
+        language: 'Age-appropriate language (8-15 words per sentence)',
+        topics: 'general social skills, friendship, communication, teamwork',
+        settings: 'school, classroom, playground, lunch table, recess',
+        avoid: 'inappropriate content, adult situations',
+        timeEstimate: '10-12 minutes',
+        exampleTitle: 'Social Skills Practice',
+        ageContext: `student in grade ${grade}`
+      };
+    };
+    
+    const guidelines = getGradeGuidelines(gradeLevel);
+    
+    // Skill level adaptations
+    const skillLevelAdaptations = {
+      1: { difficulty: 'beginner', explanation: 'very simple', examples: 'basic', complexity: 'low' },
+      2: { difficulty: 'beginner-intermediate', explanation: 'simple', examples: 'common', complexity: 'low-medium' },
+      3: { difficulty: 'intermediate', explanation: 'clear', examples: 'varied', complexity: 'medium' },
+      4: { difficulty: 'intermediate-advanced', explanation: 'detailed', examples: 'complex', complexity: 'medium-high' },
+      5: { difficulty: 'advanced', explanation: 'comprehensive', examples: 'sophisticated', complexity: 'high' }
+    };
+    
+    const skillAdaptation = skillLevelAdaptations[currentSkillLevel] || skillLevelAdaptations[3];
+    
+    // Get template for this topic
+    const topicKey = (topicName || '').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const template = getTemplate(topicKey);
+    
+    if (!template) {
+      console.log(`⚠️ No template found for topic: ${topicName}, using generic template`);
+    }
+    
+    // Build enhanced prompt using template
+    const templateInfo = template ? `
+LEARNING OBJECTIVES FOR ${gradeLevel}:
+${template.learningObjectives[gradeLevel] || template.learningObjectives['3-5']}
+
+KEY SKILLS TO TEACH:
+${template.keySkills?.join(', ') || 'General social skills'}
+
+COMMON MISTAKES TO ADDRESS:
+${template.commonMistakes?.join(', ') || 'General social mistakes'}
+
+SCENARIO CONTEXTS (use these settings):
+${template.scenarioContexts?.[gradeLevel]?.join(', ') || 'school, classroom, playground'}
+
+REAL-WORLD CHALLENGE:
+${template.realWorldChallenges?.[gradeLevel] || 'Practice this skill in your daily life'}
+
+TOPIC-SPECIFIC INSTRUCTIONS:
+${template.promptInstructions || 'Focus on building social skills appropriate for this age group'}` : `
+LEARNING OBJECTIVES FOR ${gradeLevel}:
+Learn important social skills for ${gradeLevel}
+
+KEY SKILLS TO TEACH:
+General social skills, communication, friendship
+
+COMMON MISTAKES TO ADDRESS:
+Common social mistakes, inappropriate behavior
+
+SCENARIO CONTEXTS (use these settings):
+school, classroom, playground, lunch table
+
+REAL-WORLD CHALLENGE:
+Practice this skill in your daily life
+
+TOPIC-SPECIFIC INSTRUCTIONS:
+Focus on building social skills appropriate for this age group`;
+
+    const prompt = `You are creating a complete social skills lesson for a CHILD who is a ${guidelines.ageContext}.
+
+ABSOLUTE RESTRICTIONS - YOU MUST FOLLOW THESE:
+❌ NEVER use these words: coworkers, colleagues, workplace, office, professional, networking, business, corporate, supervisor, employee, HR, management, career, resume, interview, meeting, client, customer, boss, manager
+❌ NEVER include: job interviews, work meetings, workplace conflicts, career advice, business situations, professional relationships
+❌ ONLY use these settings: school, classroom, playground, lunch table, recess, sports practice, after-school clubs, birthday parties, sleepovers, family events, neighborhood park, school bus, library, cafeteria, gym class, art class, music class
+❌ ONLY use these relationships: classmates, friends, siblings, parents, teachers, coaches, teammates, neighbors, cousins
+
+Use language and concepts appropriate for a ${guidelines.ageContext}. Every scenario, example, and explanation must be developmentally appropriate for this specific age.
+
+EVERY part of the lesson must pass this test: 'Would this happen at school or with friends?'
+If NO, do not include it.
+
+LESSON REQUIREMENTS:
+Topic: ${topicName}
+Grade Level: ${gradeLevel} (${guidelines.ageContext})
+Current Skill Level: ${currentSkillLevel} (${skillAdaptation.difficulty})
+Learner Strengths: ${learnerStrengths?.join(', ') || 'General social skills'}
+Learner Weaknesses: ${learnerWeaknesses?.join(', ') || 'General social skills'}
+
+${templateInfo}
+
+AGE-SPECIFIC GUIDELINES FOR ${guidelines.ageContext}:
+- Language: ${guidelines.language}
+- Topics: ${guidelines.topics}
+- Settings: ${guidelines.settings}
+- AVOID: ${guidelines.avoid}
+- Time Estimate: ${guidelines.timeEstimate}
+
+SKILL LEVEL ADAPTATION (Level ${currentSkillLevel}):
+- Difficulty: ${skillAdaptation.difficulty}
+- Explanation Style: ${skillAdaptation.explanation}
+- Example Complexity: ${skillAdaptation.examples}
+- Overall Complexity: ${skillAdaptation.complexity}
+
+PERSONALIZATION:
+- Build on these strengths: ${learnerStrengths?.join(', ') || 'general social skills'}
+- Focus on improving: ${learnerWeaknesses?.join(', ') || 'general social skills'}
+- Adapt difficulty to skill level ${currentSkillLevel}
+
+LESSON STRUCTURE:
+Create a complete lesson with these sections:
+
+1. INTRODUCTION:
+   - Title: Age-appropriate and engaging
+   - Learning Objective: What they'll learn (1-2 sentences)
+   - Why It Matters: Real-world relevance for their age
+   - Estimated Time: ${guidelines.timeEstimate}
+
+2. EXPLANATION:
+   - Main Concept: Simple explanation of ${topicName}
+   - Key Points: 2-3 important things to remember
+   - Common Mistakes: 2-3 things to avoid
+
+3. PRACTICE SCENARIOS (5 questions):
+   Each scenario should have:
+   - Situation: Real-world context for ${gradeLevel}
+   - Question: What should they do?
+   - 4 Options: 1 excellent, 2 good attempts, 1 poor choice
+   - Feedback: Encouraging explanation for each choice
+   - Tips: Specific improvement suggestions
+
+4. SUMMARY:
+   - What You Learned: Recap of main points
+   - Key Takeaway: 1 sentence they should remember
+   - Real-World Challenge: Specific action they can try today
+   - Next Topic: Recommended follow-up lesson
+
+VALIDATION STEP:
+Before returning your response, check:
+- Does it use age-appropriate vocabulary throughout?
+- Would all scenarios happen to a kid this age?
+- Are all relationships school/family/friend-based?
+- Are there NO adult workplace words anywhere?
+- Is the difficulty appropriate for skill level ${currentSkillLevel}?
+- Does it build on strengths and address weaknesses?
+- Does it follow the topic-specific instructions?
+
+If any part fails these checks, regenerate it.
+
+Return as JSON:
+{
+  "lesson": {
+    "id": "lesson-${(topicName || '').toLowerCase().replace(/\s+/g, '-')}-${gradeLevel}-${currentSkillLevel}",
+    "topic": "${topicName}",
+    "gradeLevel": "${gradeLevel}",
+    "skillLevel": ${currentSkillLevel},
+    "introduction": {
+      "title": "...",
+      "objective": "...",
+      "whyItMatters": "...",
+      "estimatedTime": "${guidelines.timeEstimate}"
+    },
+    "explanation": {
+      "mainConcept": "...",
+      "keyPoints": ["...", "...", "..."],
+      "commonMistakes": ["...", "..."]
+    },
+    "practiceScenarios": [
+      {
+        "id": 1,
+        "situation": "...",
+        "question": "...",
+        "options": [
+          {
+            "text": "...",
+            "quality": "excellent",
+            "feedback": "...",
+            "tip": "..."
+          },
+          {
+            "text": "...",
+            "quality": "good",
+            "feedback": "...",
+            "tip": "..."
+          },
+          {
+            "text": "...",
+            "quality": "good",
+            "feedback": "...",
+            "tip": "..."
+          },
+          {
+            "text": "...",
+            "quality": "poor",
+            "feedback": "...",
+            "tip": "..."
+          }
+        ]
+      }
+    ],
+    "summary": {
+      "whatYouLearned": "...",
+      "keyTakeaway": "...",
+      "realWorldChallenge": "...",
+      "nextTopic": "..."
+    }
+  }
+}`;
+
+    console.log(`📝 Making API call to Claude for lesson generation...`);
+    
+    const message = await anthropic.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 4000,
+      messages: [
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+    });
+    
+    let responseText = message.content[0].text;
+    console.log(`📊 API response received, validating for age-appropriateness...`);
+    
+    // Validate response for banned words (same validation as scenarios)
+    const validateLessonForAge = (responseText, gradeLevel) => {
+      const bannedWords = [
+        'coworker', 'colleague', 'workplace', 'office', 'professional', 'business', 
+        'corporate', 'employee', 'supervisor', 'HR', 'networking', 'resume', 
+        'interview', 'client', 'customer', 'boss', 'manager',
+        'colleagues', 'workplace', 'professional', 'business', 'corporate',
+        'employee', 'supervisor', 'HR', 'management', 'resume',
+        'interview', 'client', 'customer', 'boss', 'manager',
+        'work meeting', 'business meeting', 'staff meeting', 'team meeting',
+        'career advice', 'career counseling', 'career development', 'career path'
+      ];
+      
+      const lowerResponse = (responseText || '').toLowerCase();
+      
+      for (const word of bannedWords) {
+        // Use word boundaries to avoid false positives
+        const wordRegex = new RegExp(`\\b${(word || '').toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g');
+        if (wordRegex.test(lowerResponse)) {
+          console.log(`❌ BANNED WORD DETECTED: "${word}" in lesson response for ${gradeLevel}`);
+          return { isValid: false, bannedWord: word };
+        }
+      }
+      
+      return { isValid: true };
+    };
+    
+    const validation = validateLessonForAge(responseText, gradeLevel);
+    if (!validation.isValid) {
+      console.log(`🚫 Lesson response rejected due to banned word: "${validation.bannedWord}"`);
+      console.log(`🔄 Making retry API call with stricter prompt...`);
+      
+      // Retry with even stricter prompt
+      const retryPrompt = `Your previous response contained inappropriate workplace language ("${validation.bannedWord}"). Remember: this is for a CHILD in SCHOOL, not an adult at work.
+
+${prompt}
+
+CRITICAL: Do not use ANY workplace, business, or professional language anywhere in the lesson. This is for a child in grade ${gradeLevel}.`;
+
+      const retryMessage = await anthropic.messages.create({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 4000,
+        messages: [
+          {
+            role: 'user',
+            content: retryPrompt
+          }
+        ],
+      });
+      
+      const retryResponseText = retryMessage.content[0].text;
+      console.log(`📊 Retry response received, validating again...`);
+      
+      const retryValidation = validateLessonForAge(retryResponseText, gradeLevel);
+      if (!retryValidation.isValid) {
+        console.error(`❌ Retry also failed with banned word: "${retryValidation.bannedWord}"`);
+        throw new Error(`Unable to generate age-appropriate lesson. Banned word detected: ${retryValidation.bannedWord}`);
+      }
+      
+      console.log(`✅ Retry response validated successfully`);
+      responseText = retryResponseText;
+    } else {
+      console.log(`✅ Response validated successfully - no banned words detected`);
+    }
+    
+    console.log(`📊 Parsing JSON from validated response...`);
+    
+    // Try to parse JSON from response
+    let lessonData;
+    try {
+      // Extract JSON if it's wrapped in markdown code blocks
+      const jsonMatch = responseText.match(/```json\n?([\s\S]*?)\n?```/) || 
+                       responseText.match(/```\n?([\s\S]*?)\n?```/) ||
+                       [null, responseText];
+      
+      const jsonText = jsonMatch[1] || responseText;
+      
+      // Try to find JSON object in the text
+      const objectMatch = jsonText.match(/\{[\s\S]*\}/);
+      if (objectMatch) {
+        lessonData = JSON.parse(objectMatch[0]);
+      } else {
+        lessonData = JSON.parse(jsonText);
+      }
+      
+      console.log(`✅ Successfully parsed lesson: "${lessonData.lesson?.introduction?.title || 'Unknown Title'}"`);
+      console.log(`📊 Lesson contains ${lessonData.lesson?.practiceScenarios?.length || 0} practice scenarios`);
+      
+    } catch (parseError) {
+      console.error('❌ Failed to parse lesson JSON:', parseError);
+      console.error('Raw response:', responseText.substring(0, 300) + '...');
+      throw new Error('Failed to parse lesson response from AI');
+    }
+    
+    // Log cost tracking
+    const tokensUsed = message.usage?.input_tokens + message.usage?.output_tokens || 0;
+    const estimatedCost = (tokensUsed / 1000) * 0.00025; // Rough estimate for Claude Haiku
+    console.log(`💰 Token usage: ${tokensUsed} tokens (~$${estimatedCost.toFixed(4)})`);
+    
+    // Cache the lesson for future use (skip caching for now)
+    // await cacheLesson(cacheKey, lessonData.lesson, message.usage, estimatedCost);
+    
+    res.json({ 
+      success: true, 
+      lesson: lessonData.lesson,
+      usage: message.usage,
+      costEstimate: estimatedCost,
+      cached: false
+    });
+    
+  } catch (error) {
+    console.error('❌ Error generating lesson:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Generate dynamic scenario endpoint
+app.post('/api/generate-scenario', async (req, res) => {
+  try {
+    const { category, gradeLevel, topic } = req.body;
+    
+    console.log(`🎯 Generating 5 scenarios for: ${category}, Grade: ${gradeLevel}, Topic: ${topic}`);
+    
+    // Age-appropriate guidelines
+    const ageGuidelines = {
+      'K-2': {
+        language: 'Very simple words, short sentences (3-8 words per sentence)',
+        topics: 'sharing toys, taking turns, saying sorry, making friends, asking to play',
+        settings: 'playground, lunch table, classroom, recess',
+        avoid: 'dating, complex emotions, abstract concepts, adult situations',
+        example: 'You are playing with blocks and another kid wants to play too. What do you do?'
+      },
+      '3-5': {
+        language: 'Clear, concrete language (5-12 words per sentence)',
+        topics: 'group work, handling disagreements, including others, following rules',
+        settings: 'school projects, recess, clubs, art class',
+        avoid: 'romantic relationships, mature themes, complex social dynamics',
+        example: 'Your group is working on a project but one person keeps interrupting. What do you do?'
+      },
+      '6-8': {
+        language: 'Age-appropriate teen language (8-15 words per sentence)',
+        topics: 'peer pressure, social media etiquette, conflict resolution, teamwork',
+        settings: 'middle school, group chats, lunch tables, sports teams',
+        avoid: 'adult relationships, workplace scenarios, inappropriate content',
+        example: 'Someone posts something mean about your friend in the group chat. What do you do?'
+      },
+      '9-12': {
+        language: 'Mature but appropriate vocabulary (10-20 words per sentence)',
+        topics: 'networking, leadership, conflict resolution, college prep, part-time jobs',
+        settings: 'extracurriculars, part-time jobs, college prep, clubs',
+        avoid: 'inappropriate content for high schoolers, adult-only situations',
+        example: 'You disagree with your team leader about how to approach a project. What do you do?'
+      }
+    };
+    
+    const guidelines = ageGuidelines[gradeLevel] || ageGuidelines['6-8'];
+    
+    const prompt = `You are creating practice scenarios for a CHILD in grade ${gradeLevel}.
+
+ABSOLUTE RESTRICTIONS - YOU MUST FOLLOW THESE:
+❌ NEVER use these words: coworkers, colleagues, workplace, office, professional, networking, business, corporate, supervisor, employee, HR, management, career, resume, interview, meeting, client, customer, boss, manager, colleague, peer pressure (use "friends pressuring you" instead)
+❌ NEVER include: job interviews, work meetings, workplace conflicts, career advice, business situations, professional relationships
+❌ ONLY use these settings: school, classroom, playground, lunch table, recess, sports practice, after-school clubs, birthday parties, sleepovers, family events, neighborhood park, school bus, library, cafeteria, gym class, art class, music class
+❌ ONLY use these relationships: classmates, friends, siblings, parents, teachers, coaches, teammates, neighbors, cousins
+
+For K-2: Use words a 5-7 year old would know. Example: 'friend' not 'peer', 'play' not 'socialize'
+For 3-5: Use words an 8-10 year old would know. School and home are their world.
+For 6-8: Use words a 11-13 year old middle schooler would know. School social dynamics only.
+For 9-12: High school appropriate only. NO workplace or adult situations.
+
+EVERY scenario must pass this test: 'Would this happen at school or with friends?'
+If NO, do not generate it.
+
+SPECIFIC EXAMPLES FOR ${gradeLevel}:
+${gradeLevel === 'K-2' ? 'Example: "You want to play with a toy that another kid is using. What do you do?"' : ''}
+${gradeLevel === '3-5' ? 'Example: "Your friend is upset because they lost their game. What do you say?"' : ''}
+${gradeLevel === '6-8' ? 'Example: "Someone in your group project isn\'t doing their part. How do you handle it?"' : ''}
+${gradeLevel === '9-12' ? 'Example: "A friend posts something embarrassing about themselves on social media. Do you say something?"' : ''}
+
+AGE GUIDELINES FOR ${gradeLevel}:
+- Language: ${guidelines.language}
+- Topics: ${guidelines.topics}
+- Settings: ${guidelines.settings}
+- AVOID: ${guidelines.avoid}
+
+REQUIREMENTS:
+1. Create exactly 5 different scenarios
+2. Each scenario should have:
+   - A realistic context/situation for ${gradeLevel} students
+   - 3 response options (1 good choice, 2 that need improvement)
+   - Brief, encouraging feedback for each option (1-2 sentences)
+   - A helpful pro tip
+
+3. Make scenarios diverse - different settings, different social skills
+4. Use age-appropriate language and situations
+5. Keep feedback positive and educational
+
+VALIDATION STEP:
+Before returning your response, check each scenario:
+- Does it use age-appropriate vocabulary?
+- Would this actually happen to a kid this age?
+- Are all relationships school/family/friend-based?
+- Are there NO adult workplace words?
+
+If any scenario fails these checks, regenerate it.
+
+Return as JSON array:
+[
+  {
+    "context": "scenario description",
+    "options": [
+      {
+        "text": "response option",
+        "feedback": "encouraging explanation",
+        "proTip": "helpful tip",
+        "isGood": true/false,
+        "points": 10 or 0
+      }
+    ]
+  }
+]`;
+
+    // Response validation function
+    const validateScenarioForAge = (responseText, gradeLevel) => {
+      const bannedWords = [
+        'coworker', 'colleague', 'workplace', 'office', 'professional', 'business', 
+        'corporate', 'employee', 'supervisor', 'HR', 'networking', 'career', 
+        'resume', 'interview', 'meeting', 'client', 'customer', 'boss', 'manager',
+        'colleagues', 'workplace', 'professional', 'business', 'corporate',
+        'employee', 'supervisor', 'HR', 'management', 'career', 'resume',
+        'interview', 'meeting', 'client', 'customer', 'boss', 'manager'
+      ];
+      
+      const lowerResponse = (responseText || '').toLowerCase();
+      
+      for (const word of bannedWords) {
+        if (lowerResponse.includes((word || '').toLowerCase())) {
+          console.log(`❌ BANNED WORD DETECTED: "${word}" in response for ${gradeLevel}`);
+          return { isValid: false, bannedWord: word };
+        }
+      }
+      
+      return { isValid: true };
+    };
+
+    console.log(`📝 Making API call to Claude for ${gradeLevel} scenarios...`);
+    
+    const message = await anthropic.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 4000,
+      messages: [
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+    });
+    
+    let responseText = message.content[0].text;
+    console.log(`📊 API response received, validating for age-appropriateness...`);
+    
+    // Validate response for banned words
+    const validation = validateScenarioForAge(responseText, gradeLevel);
+    if (!validation.isValid) {
+      console.log(`🚫 Response rejected due to banned word: "${validation.bannedWord}"`);
+      console.log(`🔄 Making retry API call with stricter prompt...`);
+      
+      // Retry with even stricter prompt
+      const retryPrompt = `Your previous response contained inappropriate workplace language ("${validation.bannedWord}"). Remember: this is for a CHILD in SCHOOL, not an adult at work.
+
+${prompt}
+
+CRITICAL: Do not use ANY workplace, business, or professional language. This is for a child in grade ${gradeLevel}.`;
+
+      const retryMessage = await anthropic.messages.create({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 4000,
+        messages: [
+          {
+            role: 'user',
+            content: retryPrompt
+          }
+        ],
+      });
+      
+      const retryResponseText = retryMessage.content[0].text;
+      console.log(`📊 Retry response received, validating again...`);
+      
+      const retryValidation = validateScenarioForAge(retryResponseText, gradeLevel);
+      if (!retryValidation.isValid) {
+        console.error(`❌ Retry also failed with banned word: "${retryValidation.bannedWord}"`);
+        throw new Error(`Unable to generate age-appropriate scenarios. Banned word detected: ${retryValidation.bannedWord}`);
+      }
+      
+      console.log(`✅ Retry response validated successfully`);
+      responseText = retryResponseText;
+    } else {
+      console.log(`✅ Response validated successfully - no banned words detected`);
+    }
+    
+    console.log(`📊 Parsing JSON from validated response...`);
+    
+    // Try to parse JSON from response
+    let scenarios;
+    try {
+      // Extract JSON if it's wrapped in markdown code blocks
+      const jsonMatch = responseText.match(/```json\n?([\s\S]*?)\n?```/) || 
+                       responseText.match(/```\n?([\s\S]*?)\n?```/) ||
+                       [null, responseText];
+      
+      const jsonText = jsonMatch[1] || responseText;
+      
+      // Try to find JSON array in the text
+      const arrayMatch = jsonText.match(/\[[\s\S]*\]/);
+      if (arrayMatch) {
+        scenarios = JSON.parse(arrayMatch[0]);
+      } else {
+        scenarios = JSON.parse(jsonText);
+      }
+      
+      console.log(`✅ Successfully parsed ${scenarios.length} scenarios`);
+      if (scenarios.length > 0) {
+        console.log(`📋 First scenario context: "${scenarios[0].context?.substring(0, 100)}..."`);
+      }
+      
+    } catch (parseError) {
+      console.error('❌ Failed to parse JSON:', parseError);
+      console.error('Raw response:', responseText.substring(0, 200) + '...');
+      scenarios = [{ raw: responseText }]; // Return raw if parsing fails
+    }
+    
+    res.json({ 
+      success: true, 
+      scenarios,
+      usage: message.usage 
+    });
+    
+  } catch (error) {
+    console.error('❌ Error generating scenarios:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Get personalized feedback endpoint
+app.post('/api/get-feedback', async (req, res) => {
+  try {
+    const { userChoice, scenario, userHistory } = req.body;
+    
+    const prompt = `A student just made this choice in a social skills practice scenario:
+    
+Scenario: ${scenario}
+Their choice: ${userChoice}
+Their history: ${userHistory?.recentChoices || 'First attempt'}
+
+Provide encouraging, personalized feedback (2-3 sentences) that:
+- Acknowledges their choice
+- Explains why it works or doesn't
+- Offers a specific tip for improvement (if needed)
+- Encourages them to keep practicing
+
+Keep it age-appropriate and positive.`;
+
+    const message = await anthropic.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 512,
+      messages: [
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+    });
+    
+    res.json({ 
+      success: true, 
+      feedback: message.content[0].text 
+    });
+    
+  } catch (error) {
+    console.error('Error generating feedback:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Generate personalized feedback endpoint
+app.post('/api/generate-feedback', async (req, res) => {
+  try {
+    const { 
+      scenarioContext, 
+      question, 
+      studentChoice, 
+      correctAnswer, 
+      choiceQuality,
+      gradeLevel, 
+      studentStrengths, 
+      studentWeaknesses, 
+      previousPerformance 
+    } = req.body;
+    
+    console.log(`🎯 Generating personalized feedback for grade ${gradeLevel}`);
+    console.log(`📝 Scenario: ${scenarioContext?.substring(0, 50)}...`);
+    console.log(`💭 Student choice: ${studentChoice?.substring(0, 30)}...`);
+    
+    // Get grade-specific guidelines for feedback language
+    const getGradeGuidelines = (grade) => {
+      const gradeNum = parseInt(grade);
+      
+      if (grade === 'K' || grade === '0') {
+        return {
+          language: 'Very simple words, short sentences (3-6 words per sentence)',
+          examples: 'playground, sharing toys, taking turns, saying hi',
+          tone: 'warm and simple',
+          ageContext: 'kindergartener (5-6 years old)'
+        };
+      }
+      
+      if (gradeNum >= 1 && gradeNum <= 2) {
+        return {
+          language: 'Simple words, short sentences (4-8 words per sentence)',
+          examples: 'making friends, sharing, following rules',
+          tone: 'encouraging and clear',
+          ageContext: `${gradeNum === 1 ? '1st grader' : '2nd grader'} (${gradeNum === 1 ? '6-7' : '7-8'} years old)`
+        };
+      }
+      
+      if (gradeNum >= 3 && gradeNum <= 5) {
+        return {
+          language: 'Clear, concrete language (5-12 words per sentence)',
+          examples: 'group work, handling disagreements, including others',
+          tone: 'supportive and educational',
+          ageContext: `${gradeNum}${gradeNum === 3 ? 'rd' : gradeNum === 4 ? 'th' : 'th'} grader (${gradeNum + 5}-${gradeNum + 6} years old)`
+        };
+      }
+      
+      if (gradeNum >= 6 && gradeNum <= 8) {
+        return {
+          language: 'Age-appropriate teen language (8-15 words per sentence)',
+          examples: 'peer pressure, social media, teamwork, conflict resolution',
+          tone: 'respectful and understanding',
+          ageContext: `${gradeNum}${gradeNum === 6 ? 'th' : gradeNum === 7 ? 'th' : 'th'} grader (${gradeNum + 5}-${gradeNum + 6} years old)`
+        };
+      }
+      
+      if (gradeNum >= 9 && gradeNum <= 12) {
+        return {
+          language: 'Mature but appropriate vocabulary (10-20 words per sentence)',
+          examples: 'leadership, relationships, college prep, part-time jobs',
+          tone: 'professional but warm',
+          ageContext: `${gradeNum}${gradeNum === 9 ? 'th' : gradeNum === 10 ? 'th' : gradeNum === 11 ? 'th' : 'th'} grader (${gradeNum + 5}-${gradeNum + 6} years old)`
+        };
+      }
+      
+      return {
+        language: 'Age-appropriate language',
+        examples: 'general social skills',
+        tone: 'encouraging',
+        ageContext: `student in grade ${grade}`
+      };
+    };
+    
+    const guidelines = getGradeGuidelines(gradeLevel);
+    
+    const prompt = `You are a supportive social skills coach for a ${guidelines.ageContext}.
+
+FEEDBACK REQUIREMENTS:
+- Language: ${guidelines.language}
+- Examples: Use ${guidelines.examples}
+- Tone: ${guidelines.tone}
+- NEVER use words like "wrong," "bad," "incorrect," or "failed"
+- Use phrases like "Let's think about this..." or "Here's a better way..."
+- Focus on growth mindset and learning
+- Be warm, encouraging, and supportive
+
+STUDENT PROFILE:
+- Grade Level: ${gradeLevel} (${guidelines.ageContext})
+- Strengths: ${studentStrengths?.join(', ') || 'general social skills'}
+- Areas to improve: ${studentWeaknesses?.join(', ') || 'general social skills'}
+- Recent performance: ${previousPerformance || 'new learner'}
+
+SCENARIO ANALYSIS:
+Situation: ${scenarioContext}
+Question: ${question}
+Student's choice: ${studentChoice}
+Best answer: ${correctAnswer}
+Choice quality: ${choiceQuality}
+
+FEEDBACK GUIDELINES BASED ON CHOICE QUALITY:
+
+EXCELLENT choice:
+- Give specific praise for what they did right
+- Explain WHY this is effective in this situation
+- Connect to real-world benefits
+- Reference their strengths when relevant
+- 2-3 sentences, encouraging tone
+
+GOOD choice:
+- Acknowledge what they did right
+- Gently explain what could be even better
+- Provide specific actionable tip
+- Stay positive and encouraging
+- 2-3 sentences
+
+POOR choice:
+- Stay supportive (use "Let's think about this..." or "Here's a better way...")
+- Explain why this might not work well
+- Teach the missing social skill
+- Suggest what to try instead with specific example
+- End with encouragement
+- Reference their weaknesses to help improve
+- 3-4 sentences
+
+RESPONSE FORMAT (JSON):
+{
+  "feedback": "Main personalized feedback text here...",
+  "skillHighlight": "The specific social skill demonstrated or needed",
+  "realWorldTip": "Concrete thing to try in real life",
+  "encouragement": "Brief motivational message"
+}
+
+Make the feedback feel natural, personalized, and encouraging for a ${guidelines.ageContext}.`;
+
+    console.log(`📝 Making API call to Claude for feedback generation...`);
+    
+    // Add 3-second timeout to prevent hanging
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Feedback generation timeout')), 3000);
+    });
+    
+    const apiPromise = anthropic.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 800,
+      messages: [
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+    });
+    
+    const message = await Promise.race([apiPromise, timeoutPromise]);
+    
+    let responseText = message.content[0].text;
+    console.log(`📊 API response received for feedback generation...`);
+    
+    // Parse JSON from response
+    let feedbackData;
+    try {
+      // Extract JSON from markdown code blocks if present
+      const jsonMatch = responseText.match(/```json\n?([\s\S]*?)\n?```/) || 
+                       responseText.match(/```\n?([\s\S]*?)\n?```/) || 
+                       [null, responseText];
+      feedbackData = JSON.parse(jsonMatch[1] || responseText);
+    } catch (parseError) {
+      console.error('❌ Failed to parse feedback JSON:', parseError);
+      throw new Error('Failed to parse feedback response from AI');
+    }
+    
+    // Log cost tracking
+    const tokensUsed = message.usage?.input_tokens + message.usage?.output_tokens || 0;
+    const estimatedCost = (tokensUsed / 1000) * 0.00025;
+    console.log(`💰 Feedback generation cost: ${tokensUsed} tokens (~$${estimatedCost.toFixed(4)})`);
+    
+    console.log(`✅ Personalized feedback generated successfully`);
+    
+    res.json({ 
+      success: true, 
+      feedback: feedbackData,
+      usage: message.usage,
+      costEstimate: estimatedCost
+    });
+    
+  } catch (error) {
+    console.error('❌ Error generating feedback:', error);
+    
+    // Return fallback feedback instead of error
+    const fallbackFeedback = {
+      feedback: "Great thinking! Keep practicing this skill.",
+      skillHighlight: "Social skills practice",
+      realWorldTip: "Try applying this in real life situations.",
+      encouragement: "You're doing great! Keep learning and growing."
+    };
+    
+    res.json({ 
+      success: true, 
+      feedback: fallbackFeedback,
+      fallback: true,
+      error: error.message 
+    });
+  }
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+});

@@ -36,6 +36,8 @@ function App() {
 
   const handleOnboardingComplete = (data) => {
     try {
+      console.log('Onboarding data received:', data);
+      
       const userDataToSave = {
         userName: data.name || 'User',
         gradeLevel: data.gradeLevel || '6',
@@ -50,6 +52,7 @@ function App() {
         lastActiveDate: new Date().toDateString()
       };
 
+      console.log('Saving user data:', userDataToSave);
       localStorage.setItem('socialCueUserData', JSON.stringify(userDataToSave));
       setUserData(data);
       setAppState('app');

@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Home, Target, TrendingUp, Settings } from 'lucide-react';
+import { Home, Target, TrendingUp, Settings, BookOpen } from 'lucide-react';
 import { getUserData, saveUserData } from './socialcue/utils/storage';
+import { lessonApiService } from '../services/lessonApi';
 import HomeScreen from './socialcue/HomeScreen';
 import PracticeScreen from './socialcue/PracticeScreen';
 import ProgressScreen from './socialcue/ProgressScreen';
 import SettingsScreen from './socialcue/SettingsScreen';
 import PracticeSession from './socialcue/PracticeSession';
+import AILessonSession from './socialcue/AILessonSession';
+import AIPracticeSession from './AIPracticeSession';
+import LessonsScreen from './socialcue/LessonsScreen';
 import BottomNav from './socialcue/BottomNav';
 
 function SocialCueApp({ onLogout }) {
@@ -19,6 +23,7 @@ function SocialCueApp({ onLogout }) {
 
   useEffect(() => {
     const data = getUserData();
+    console.log('SocialCueApp loaded userData:', data);
     setUserData(data);
     
     // Load preferences from localStorage
@@ -57,14 +62,36 @@ function SocialCueApp({ onLogout }) {
 
   const handleNavigate = (screen, sid) => {
     setCurrentScreen(screen);
-    if (sid) setSessionId(sid);
-    // Reload user data when navigating
-    const data = getUserData();
-    setUserData(data);
+    if (sid) {
+      setSessionId(sid);
+      // Set topicName based on sessionId
+      const topicMap = {
+        1: 'Small Talk Basics',
+        2: 'Active Listening', 
+        3: 'Reading Body Language',
+        4: 'Building Confidence',
+        5: 'Conflict Resolution',
+        6: 'Teamwork',
+        7: 'Empathy',
+        8: 'Assertiveness'
+      };
+      const topicName = topicMap[sid] || 'Social Skills';
+      
+      // Update user data with topicName
+      const currentData = getUserData();
+      const updatedData = { ...currentData, topicName };
+      saveUserData(updatedData);
+      setUserData(updatedData);
+    } else {
+      // Reload user data when navigating (but preserve topicName if it exists)
+      const data = getUserData();
+      setUserData(data);
+    }
   };
 
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
+    { id: 'lessons', label: 'Lessons', icon: BookOpen },
     { id: 'practice', label: 'Practice', icon: Target },
     { id: 'progress', label: 'Progress', icon: TrendingUp },
     { id: 'settings', label: 'Settings', icon: Settings }
@@ -84,6 +111,14 @@ function SocialCueApp({ onLogout }) {
           />
         )}
         
+        {currentScreen === 'lessons' && (
+          <LessonsScreen 
+            userData={userData} 
+            onNavigate={handleNavigate} 
+            darkMode={darkMode} 
+          />
+        )}
+        
         {currentScreen === 'practice' && sessionId && (
           <PracticeSession 
             sessionId={sessionId} 
@@ -92,6 +127,7 @@ function SocialCueApp({ onLogout }) {
             gradeLevel={userData.grade || "5"} 
             soundEffects={soundEffects}
             autoReadText={autoReadText}
+            topicName={userData.topicName}
           />
         )}
         
@@ -99,6 +135,14 @@ function SocialCueApp({ onLogout }) {
           <PracticeScreen 
             onNavigate={handleNavigate} 
             darkMode={darkMode} 
+          />
+        )}
+        
+        {currentScreen === 'ai-practice' && (
+          <AIPracticeSession 
+            category="AI Practice" 
+            gradeLevel={userData.gradeLevel || "6-8"} 
+            onComplete={() => handleNavigate('home')}
           />
         )}
         

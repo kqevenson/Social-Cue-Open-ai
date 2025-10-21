@@ -1,0 +1,103 @@
+// API service for AI lesson generation
+const API_BASE_URL = 'http://localhost:3001/api';
+
+export const lessonApiService = {
+  // Generate a new AI-powered lesson
+  async generateLesson(topicName, gradeLevel, currentSkillLevel, learnerStrengths, learnerWeaknesses) {
+    try {
+      console.log('🎯 Generating AI lesson with params:', {
+        topicName,
+        gradeLevel,
+        currentSkillLevel,
+        learnerStrengths,
+        learnerWeaknesses
+      });
+
+      const response = await fetch(`${API_BASE_URL}/generate-lesson`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          topicName,
+          gradeLevel,
+          currentSkillLevel,
+          learnerStrengths,
+          learnerWeaknesses
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to generate lesson');
+      }
+
+      console.log('✅ AI lesson generated successfully:', data.lesson.introduction.title);
+      return data.lesson;
+    } catch (error) {
+      console.error('❌ Error generating AI lesson:', error);
+      throw error;
+    }
+  },
+
+  // Cache lesson in localStorage
+  cacheLesson(lesson, cacheKey) {
+    try {
+      const cachedData = {
+        lesson,
+        cachedAt: new Date().toISOString(),
+        cacheKey
+      };
+      localStorage.setItem(`ai_lesson_${cacheKey}`, JSON.stringify(cachedData));
+      console.log('💾 Lesson cached:', cacheKey);
+    } catch (error) {
+      console.error('❌ Error caching lesson:', error);
+    }
+  },
+
+  // Get cached lesson from localStorage
+  getCachedLesson(cacheKey) {
+    try {
+      const cached = localStorage.getItem(`ai_lesson_${cacheKey}`);
+      if (cached) {
+        const data = JSON.parse(cached);
+        console.log('📦 Retrieved cached lesson:', data.lesson.introduction.title);
+        return data.lesson;
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Error retrieving cached lesson:', error);
+      return null;
+    }
+  },
+
+  // Generate cache key for lesson
+  generateCacheKey(topicName, gradeLevel, currentSkillLevel, learnerStrengths, learnerWeaknesses) {
+    const strengths = learnerStrengths?.sort().join(',') || '';
+    const weaknesses = learnerWeaknesses?.sort().join(',') || '';
+    return `${(topicName || '').toLowerCase().replace(/\s+/g, '-')}-${gradeLevel}-${currentSkillLevel}-${strengths}-${weaknesses}`;
+  },
+
+  // Check if AI lessons are enabled
+  isAILessonsEnabled() {
+    try {
+      const setting = localStorage.getItem('ai_lessons_enabled');
+      return setting === 'true';
+    } catch (error) {
+      console.error('❌ Error checking AI lessons setting:', error);
+      return false;
+    }
+  },
+
+  // Enable/disable AI lessons
+  setAILessonsEnabled(enabled) {
+    try {
+      localStorage.setItem('ai_lessons_enabled', enabled.toString());
+      console.log('⚙️ AI lessons setting updated:', enabled);
+    } catch (error) {
+      console.error('❌ Error updating AI lessons setting:', error);
+    }
+  }
+};
+

@@ -208,7 +208,7 @@ export default function LandingPage({ onGetStarted }) {
                 </li>
                 <li className="flex items-start gap-3">
                   <Check className="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" />
-                  <span className="text-gray-300">AI-powered insights</span>
+                  <span className="text-gray-300">Smart insights</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <Check className="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" />
