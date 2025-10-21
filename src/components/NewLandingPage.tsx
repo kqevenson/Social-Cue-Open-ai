@@ -192,7 +192,7 @@ function NewLandingPage({ onGetStarted }) {
             </p>
           </div>
           
-          <div className="grid md:grid-cols-4 gap-8">
+          <div className="grid md:grid-cols-3 gap-8">
             <div className="text-center">
               <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center mb-6 mx-auto">
                 <span className="text-3xl font-bold text-white">1</span>
@@ -216,14 +216,6 @@ function NewLandingPage({ onGetStarted }) {
               <h3 className="text-2xl font-bold mb-4">Get AI Feedback</h3>
               <p className="text-gray-300">Receive instant, personalized coaching on your responses with actionable tips for improvement.</p>
             </div>
-
-            <div className="text-center">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-pink-500 to-pink-600 flex items-center justify-center mb-6 mx-auto">
-                <span className="text-3xl font-bold text-white">4</span>
-              </div>
-              <h3 className="text-2xl font-bold mb-4">Track Progress</h3>
-              <p className="text-gray-300">Watch your confidence grow with detailed analytics and celebrate your achievements.</p>
-            </div>
           </div>
         </div>
       </section>
@@ -240,7 +232,7 @@ function NewLandingPage({ onGetStarted }) {
             </p>
           </div>
           
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             <div className="p-8 rounded-3xl bg-white/5 backdrop-blur border border-white/10 hover:border-blue-500/30 transition-all">
               <div className="flex gap-1 mb-6">
                 {[...Array(5)].map((_, i) => (
@@ -273,24 +265,6 @@ function NewLandingPage({ onGetStarted }) {
                 <div>
                   <p className="font-bold text-xl">James T.</p>
                   <p className="text-gray-400">High School Senior</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-8 rounded-3xl bg-white/5 backdrop-blur border border-white/10 hover:border-purple-500/30 transition-all">
-              <div className="flex gap-1 mb-6">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-6 h-6 fill-yellow-400 text-yellow-400" />
-                ))}
-              </div>
-              <p className="text-gray-300 mb-8 text-lg leading-relaxed">
-                "The AI feedback is incredible. It's like having a personal coach available 24/7. My social skills have improved dramatically."
-              </p>
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-500 to-blue-500"></div>
-                <div>
-                  <p className="font-bold text-xl">Maria L.</p>
-                  <p className="text-gray-400">College Freshman</p>
                 </div>
               </div>
             </div>
@@ -340,7 +314,7 @@ function NewLandingPage({ onGetStarted }) {
               </button>
             </div>
 
-            {/* Premium Plan */}
+            {/* Pro Plan */}
             <div className="p-8 rounded-3xl bg-gradient-to-br from-blue-500/20 to-emerald-500/20 border-2 border-blue-500/50 relative">
               <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
                 <span className="bg-gradient-to-r from-blue-500 to-emerald-400 text-white px-6 py-2 rounded-full text-sm font-bold">
@@ -348,7 +322,7 @@ function NewLandingPage({ onGetStarted }) {
                 </span>
               </div>
               <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold mb-4">Premium</h3>
+                <h3 className="text-2xl font-bold mb-4">Pro</h3>
                 <div className="text-4xl font-bold mb-2">$9.99</div>
                 <p className="text-gray-400">per month</p>
               </div>
@@ -374,7 +348,7 @@ function NewLandingPage({ onGetStarted }) {
                 onClick={handleGetStarted}
                 className="w-full bg-gradient-to-r from-blue-500 to-emerald-400 text-white font-bold py-4 rounded-full hover:shadow-lg transition-all duration-300"
               >
-                Get Premium
+                Get Pro
               </button>
             </div>
 
@@ -440,33 +414,7 @@ function NewLandingPage({ onGetStarted }) {
       {/* Footer */}
       <footer className="relative px-6 py-16 border-t border-white/10">
         <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-5 gap-8 mb-12">
-            <div className="md:col-span-2">
-              <div className="flex items-end mb-6" style={{letterSpacing: '-1px'}}>
-                <span className="font-extrabold text-3xl text-white">Social</span>
-                <span className="font-extrabold text-3xl text-white">C</span>
-                <div className="flex flex-col items-center justify-end" style={{marginBottom: '3px', height: '24px', gap: '4px'}}>
-                  <div className="flex" style={{gap: '6px'}}>
-                    <div className="rounded-full" style={{width: '3px', height: '3px', background: '#4A90E2'}}></div>
-                    <div className="rounded-full" style={{width: '3px', height: '3px', background: '#4A90E2'}}></div>
-                  </div>
-                  <div style={{
-                    width: '12px',
-                    height: '6px',
-                    borderLeft: '2px solid #34D399',
-                    borderRight: '2px solid #34D399',
-                    borderBottom: '2px solid #34D399',
-                    borderTop: 'none',
-                    borderRadius: '0 0 6px 6px'
-                  }}></div>
-                </div>
-                <span className="font-extrabold text-3xl text-white">e</span>
-              </div>
-              <p className="text-gray-400 text-lg max-w-md">
-                Transform your social skills with AI-powered coaching. Build confidence, read cues, and connect authentically.
-              </p>
-            </div>
-            
+          <div className="grid md:grid-cols-4 gap-8 mb-12">
             <div>
               <h4 className="font-bold text-xl mb-6">Product</h4>
               <ul className="space-y-3 text-gray-400">
@@ -478,7 +426,17 @@ function NewLandingPage({ onGetStarted }) {
             </div>
             
             <div>
-              <h4 className="font-bold text-xl mb-6">Support</h4>
+              <h4 className="font-bold text-xl mb-6">Company</h4>
+              <ul className="space-y-3 text-gray-400">
+                <li className="hover:text-white cursor-pointer transition">About</li>
+                <li className="hover:text-white cursor-pointer transition">Blog</li>
+                <li className="hover:text-white cursor-pointer transition">Careers</li>
+                <li className="hover:text-white cursor-pointer transition">Press</li>
+              </ul>
+            </div>
+            
+            <div>
+              <h4 className="font-bold text-xl mb-6">Resources</h4>
               <ul className="space-y-3 text-gray-400">
                 <li className="hover:text-white cursor-pointer transition">Help Center</li>
                 <li className="hover:text-white cursor-pointer transition">Community</li>
