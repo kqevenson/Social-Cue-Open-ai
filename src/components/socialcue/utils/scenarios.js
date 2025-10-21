@@ -1518,6 +1518,558 @@ const scenarios = {
           ]
         }
       ]
+    },
+    // CATEGORY 3: BODY LANGUAGE
+    3: {
+      id: 3,
+      title: {
+        'k2': 'Body Language',
+        '3-5': 'Reading Bodies',
+        '6-8': 'Body Language',
+        '9-12': 'Nonverbal Communication'
+      },
+      color: '#8B5CF6',
+      background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+      situations: [
+        // SCENARIO 1: Eye Contact Basics
+        {
+          id: 1,
+          image: 'https://images.unsplash.com/photo-1577896851231-70ef18881754?w=800&q=80',
+          imageAlt: 'Eye contact',
+          context: {
+            'k2': "You're talking to your teacher.",
+            '3-5': "You're having a conversation with a friend.",
+            '6-8': "You're meeting someone new at school.",
+            '9-12': "You're in a conversation with a peer or adult."
+          },
+          prompt: {
+            'k2': "Where should you look?",
+            '3-5': "What should you do with your eyes?",
+            '6-8': "How much eye contact is appropriate?",
+            '9-12': "What's the right balance of eye contact?"
+          },
+          options: [
+            {
+              text: {
+                'k2': "*Look at their face while they talk*",
+                '3-5': "*Look at their eyes most of the time, look away sometimes*",
+                '6-8': "*Maintain eye contact 60-70% of the time, natural breaks*",
+                '9-12': "*Hold eye contact while they speak, brief glances away periodically*"
+              },
+              feedback: {
+                'k2': "Perfect! Looking at their face shows you're paying attention!",
+                '3-5': "Great! That's the right balance - mostly looking, sometimes away!",
+                '6-8': "Excellent! That's natural, comfortable eye contact.",
+                '9-12': "Ideal! This demonstrates engagement without intensity."
+              },
+              proTip: {
+                'k2': "Pro Tip: Look at people's faces when they talk to you! It shows you're listening!",
+                '3-5': "Pro Tip: Look at their eyes most of the time, but it's okay to look away sometimes!",
+                '6-8': "Pro Tip: The 60/40 rule: maintain eye contact 60% of the time, look away 40% to keep it comfortable.",
+                '9-12': "Pro Tip: Natural eye contact rhythm: hold while listening, can look away briefly while processing or thinking."
+              },
+              isGood: true,
+              points: 10
+            },
+            {
+              text: {
+                'k2': "*Stare at them without blinking*",
+                '3-5': "*Look directly at them the whole time without looking away*",
+                '6-8': "*Maintain intense, unbroken eye contact*",
+                '9-12': "*Lock eyes without breaking contact at all*"
+              },
+              feedback: {
+                'k2': "That might feel scary to them! Blink and look away sometimes!",
+                '3-5': "That's too much! Looking away sometimes is normal and okay!",
+                '6-8': "Unbroken eye contact feels aggressive or uncomfortable. Add natural breaks.",
+                '9-12': "Intense, unbroken eye contact reads as confrontational or awkward."
+              },
+              proTip: {
+                'k2': "Pro Tip: Remember to blink! And it's okay to look away for a second!",
+                '3-5': "Pro Tip: Too much staring makes people uncomfortable! Look away naturally every few seconds!",
+                '6-8': "Pro Tip: Constant eye contact without breaks feels intense. Look away briefly when natural.",
+                '9-12': "Pro Tip: Unbroken eye contact signals aggression or social awkwardness. Natural rhythm includes glancing away."
+              },
+              isGood: false,
+              points: 2
+            },
+            {
+              text: {
+                'k2': "*Look at the floor the whole time*",
+                '3-5': "*Look around the room, not at them*",
+                '6-8': "*Avoid eye contact, look at your phone or elsewhere*",
+                '9-12': "*Maintain minimal eye contact, focused on objects or devices*"
+              },
+              feedback: {
+                'k2': "They might think you're not listening! Look up at them!",
+                '3-5': "You seem distracted or uninterested! Look at them!",
+                '6-8': "Avoiding eye contact signals disinterest or discomfort.",
+                '9-12': "Eye contact avoidance communicates anxiety, disinterest, or dishonesty."
+              },
+              proTip: {
+                'k2': "Pro Tip: Look at people when they talk! If you're shy, look at their nose or forehead!",
+                '3-5': "Pro Tip: If eye contact is hard, look at the space between their eyes or their nose!",
+                '6-8': "Pro Tip: If direct eye contact is uncomfortable, look at the bridge of their nose - they won't notice the difference.",
+                '9-12': "Pro Tip: Comfort hack: focus on one eye at a time, or the area between eyebrows. Appears as full eye contact."
+              },
+              isGood: false,
+              points: 0
+            }
+          ]
+        },
+        // SCENARIO 2: Reading Facial Expressions
+        {
+          id: 2,
+          image: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=800&q=80',
+          imageAlt: 'Reading expressions',
+          context: {
+            'k2': "Someone's face looks like this: 😠 with crossed arms.",
+            '3-5': "You see a classmate with a frown and slumped shoulders.",
+            '6-8': "Someone you're talking to has their arms crossed and is frowning slightly.",
+            '9-12': "A person's jaw is tight, arms are crossed, and they're giving short answers."
+          },
+          prompt: {
+            'k2': "How do they feel?",
+            '3-5': "What might they be feeling?",
+            '6-8': "What are these signals telling you?",
+            '9-12': "What's the appropriate interpretation?"
+          },
+          options: [
+            {
+              text: {
+                'k2': "They look mad or upset!",
+                '3-5': "They seem upset or frustrated about something.",
+                '6-8': "They appear frustrated or uncomfortable with the situation.",
+                '9-12': "They're displaying signs of frustration, anger, or defensiveness."
+              },
+              feedback: {
+                'k2': "Right! Their face and body show they're not happy!",
+                '3-5': "Good reading! Those are signs of negative emotions!",
+                '6-8': "Correct! You've identified defensive/negative body language.",
+                '9-12': "Accurate! These are clear indicators of negative emotional state."
+              },
+              proTip: {
+                'k2': "Pro Tip: When someone frowns or crosses their arms, they might be mad or sad!",
+                '3-5': "Pro Tip: Crossed arms + frown = upset! Give them space or ask if they're okay!",
+                '6-8': "Pro Tip: Cluster reading: one signal might be random, but multiple signals confirm the emotion.",
+                '9-12': "Pro Tip: Defensive posture (crossed arms, tight jaw, closed body) signals discomfort. Adjust approach accordingly."
+              },
+              isGood: true,
+              points: 10
+            },
+            {
+              text: {
+                'k2': "They're really happy!",
+                '3-5': "They seem excited and happy!",
+                '6-8': "They're having a great time!",
+                '9-12': "They seem engaged and positive!"
+              },
+              feedback: {
+                'k2': "Not quite! Frowns and crossed arms usually mean they're upset!",
+                '3-5': "That's not matching their body language! Look again!",
+                '6-8': "You've misread the signals. These are negative indicators.",
+                '9-12': "This is a significant misread of clear negative signals."
+              },
+              proTip: {
+                'k2': "Pro Tip: Happy faces smile! 😊 Unhappy faces frown! ☹️",
+                '3-5': "Pro Tip: Smiles = happy! Frowns = unhappy! Watch faces to understand feelings!",
+                '6-8': "Pro Tip: Basic emotion reading: smile + open posture = positive, frown + closed posture = negative.",
+                '9-12': "Pro Tip: Misreading negative signals as positive can escalate conflicts. When in doubt, check verbally."
+              },
+              isGood: false,
+              points: 0
+            },
+            {
+              text: {
+                'k2': "I don't know, I'm not looking at them.",
+                '3-5': "I wasn't really paying attention.",
+                '6-8': "I don't really notice body language.",
+                '9-12': "I don't read into those things."
+              },
+              feedback: {
+                'k2': "You need to look at people to understand how they feel!",
+                '3-5': "Body language tells you a lot! Start noticing these signs!",
+                '6-8': "Ignoring body language means missing important social information.",
+                '9-12': "Body language literacy is essential for social competence. Start observing."
+              },
+              proTip: {
+                'k2': "Pro Tip: Look at people's faces and bodies! They tell you how someone feels!",
+                '3-5': "Pro Tip: Start noticing: Are they smiling? Frowning? Arms open or closed? This helps you understand people!",
+                '6-8': "Pro Tip: 55% of communication is body language. Start practicing observation in low-stakes situations.",
+                '9-12': "Pro Tip: Body language awareness is a learnable skill. Practice: observe people in public and guess their emotions."
+              },
+              isGood: false,
+              points: 0
+            }
+          ]
+        },
+        // SCENARIO 3: Personal Space Boundaries
+        {
+          id: 3,
+          image: 'https://images.unsplash.com/photo-1517898717222-37dd902c63e1?w=800&q=80',
+          imageAlt: 'Personal space',
+          context: {
+            'k2': "You're excited to talk to a new friend!",
+            '3-5': "You want to show someone something on your tablet.",
+            '6-8': "You're having a conversation with someone you just met.",
+            '9-12': "You're talking to an acquaintance in a social setting."
+          },
+          prompt: {
+            'k2': "How close should you stand?",
+            '3-5': "What's a good distance?",
+            '6-8': "What's appropriate personal space?",
+            '9-12': "What distance is socially appropriate?"
+          },
+          options: [
+            {
+              text: {
+                'k2': "*About an arm's length away*",
+                '3-5': "*About 2-3 feet away, arm's length*",
+                '6-8': "*About 2-4 feet, conversational distance*",
+                '9-12': "*Approximately 2-4 feet for acquaintances, 1.5-2 for friends*"
+              },
+              feedback: {
+                'k2': "Perfect! That's a good friendly distance!",
+                '3-5': "Great! That's comfortable for both of you!",
+                '6-8': "Excellent! That's the standard social distance.",
+                '9-12': "Ideal! This respects personal space while maintaining connection."
+              },
+              proTip: {
+                'k2': "Pro Tip: If you can touch them without moving, you're too close! One big step back!",
+                '3-5': "Pro Tip: The arm's length rule: stretch out your arm - that's about right!",
+                '6-8': "Pro Tip: Personal space varies by relationship: acquaintances 3-4ft, friends 2-3ft, close friends 1.5-2ft.",
+                '9-12': "Pro Tip: Cultural context matters, but general US rule: social distance = 2-4ft. Adjust based on their signals."
+              },
+              isGood: true,
+              points: 10
+            },
+            {
+              text: {
+                'k2': "*Right next to them, really close*",
+                '3-5': "*Very close, almost touching*",
+                '6-8': "*Within 1 foot, intimate distance*",
+                '9-12': "*Close enough to feel their breath, < 1.5 feet*"
+              },
+              feedback: {
+                'k2': "Too close! Take a step back!",
+                '3-5': "That's uncomfortably close for most people! Give them space!",
+                '6-8': "You've invaded their personal space. This distance is for intimate relationships only.",
+                '9-12': "Intimate distance (<1.5ft) with non-intimates creates significant discomfort."
+              },
+              proTip: {
+                'k2': "Pro Tip: If you're close enough to hug, you're too close for talking! Step back!",
+                '3-5': "Pro Tip: Watch their reaction! If they lean back, you're too close!",
+                '6-8': "Pro Tip: If someone steps back when you approach, you've crossed their boundary. Maintain the new distance.",
+                '9-12': "Pro Tip: Space invasions create anxiety. Watch for retreat signals: leaning back, stepping away, crossed arms."
+              },
+              isGood: false,
+              points: 0
+            },
+            {
+              text: {
+                'k2': "*Across the room, far away*",
+                '3-5': "*Several feet away, shouting distance*",
+                '6-8': "*6+ feet away, public space distance*",
+                '9-12': "*Beyond 7 feet, public distance*"
+              },
+              feedback: {
+                'k2': "That's too far! Come a bit closer so you don't have to yell!",
+                '3-5': "That's pretty far! You'll have to talk really loud!",
+                '6-8': "That's too distant for conversation. Come closer.",
+                '9-12': "Public distance (7+ ft) is appropriate for presentations, not conversations."
+              },
+              proTip: {
+                'k2': "Pro Tip: You should be close enough to talk in a normal voice!",
+                '3-5': "Pro Tip: Good talking distance = you can hear each other without shouting!",
+                '6-8': "Pro Tip: If you have to raise your voice significantly, you're too far. 2-4 feet is the sweet spot.",
+                '9-12': "Pro Tip: Distance zones: intimate (<1.5ft), personal (1.5-4ft), social (4-12ft), public (12+ft). Conversation = personal zone."
+              },
+              isGood: false,
+              points: 3
+            }
+          ]
+        },
+        // SCENARIO 4: Confident Posture
+        {
+          id: 4,
+          image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=800&q=80',
+          imageAlt: 'Confident posture',
+          context: {
+            'k2': "You're meeting your new teacher for the first time.",
+            '3-5': "You're introducing yourself to a new student.",
+            '6-8': "You're giving a presentation to your class.",
+            '9-12': "You're at a job interview or meeting new people at an event."
+          },
+          prompt: {
+            'k2': "How should you stand?",
+            '3-5': "What's good posture?",
+            '6-8': "How do you present confidence through posture?",
+            '9-12': "What body language projects confidence?"
+          },
+          options: [
+            {
+              text: {
+                'k2': "*Stand up tall with shoulders back*",
+                '3-5': "*Stand straight, head up, shoulders back*",
+                '6-8': "*Upright posture, shoulders back, weight balanced*",
+                '9-12': "*Erect spine, shoulders back and down, chin parallel to ground, open stance*"
+              },
+              feedback: {
+                'k2': "Perfect! Standing tall makes you look confident!",
+                '3-5': "Excellent! That's confident, friendly posture!",
+                '6-8': "Great! This projects confidence and readiness.",
+                '9-12': "Ideal! This is textbook confident body language."
+              },
+              proTip: {
+                'k2': "Pro Tip: Pretend there's a string pulling you up from the top of your head!",
+                '3-5': "Pro Tip: Think 'superhero pose'! Stand tall and proud!",
+                '6-8': "Pro Tip: Quick confidence check: shoulders back, chest open, head level. This instantly improves presence.",
+                '9-12': "Pro Tip: Power posing (expansive posture) for 2 minutes before stressful situations actually increases confidence hormones."
+              },
+              isGood: true,
+              points: 10
+            },
+            {
+              text: {
+                'k2': "*Hunch over and look at the ground*",
+                '3-5': "*Slouch with rounded shoulders, look down*",
+                '6-8': "*Hunched posture, eyes down, closed body language*",
+                '9-12': "*Rounded shoulders, downward gaze, collapsed chest*"
+              },
+              feedback: {
+                'k2': "That looks sad or scared! Stand up straight instead!",
+                '3-5': "That looks uncertain and uncomfortable! Stand up tall!",
+                '6-8': "This projects insecurity and discomfort. Open up your posture.",
+                '9-12': "Closed, collapsed posture signals low confidence and invites dismissal."
+              },
+              proTip: {
+                'k2': "Pro Tip: Looking at the ground makes you seem sad! Look up and smile!",
+                '3-5': "Pro Tip: Slouching makes you look tired or sad! Standing tall makes you look happy and ready!",
+                '6-8': "Pro Tip: Posture affects emotion! Deliberately adjusting to open posture actually makes you feel more confident.",
+                '9-12': "Pro Tip: Body-mind connection: changing posture changes emotion. Stand confidently even when you don't feel it - feeling follows form."
+              },
+              isGood: false,
+              points: 0
+            },
+            {
+              text: {
+                'k2': "*Cross arms and look away*",
+                '3-5': "*Cross arms tightly, shift weight nervously*",
+                '6-8': "*Crossed arms, one hip out, defensive stance*",
+                '9-12': "*Arms crossed, weight shifted, barrier body language*"
+              },
+              feedback: {
+                'k2': "Crossing your arms can look unfriendly! Keep your arms at your sides!",
+                '3-5': "That looks closed off! Keep your arms relaxed at your sides!",
+                '6-8': "Crossed arms signal defensiveness or discomfort. Open your posture.",
+                '9-12': "Barrier gestures (crossed arms, shifted weight) communicate unavailability and discomfort."
+              },
+              proTip: {
+                'k2': "Pro Tip: Keep your arms by your sides or in front of you, not crossed!",
+                '3-5': "Pro Tip: Crossed arms = 'stay away!' Open arms = 'I'm friendly!'",
+                '6-8': "Pro Tip: If you feel awkward with your arms, clasp hands in front (not crossed), or keep one arm relaxed at side.",
+                '9-12': "Pro Tip: Self-hugging gestures (crossed arms, holding elbows) create physical barriers. Practice open, expansive poses."
+              },
+              isGood: false,
+              points: 2
+            }
+          ]
+        },
+        // SCENARIO 5: Handshakes and Greetings
+        {
+          id: 5,
+          image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80',
+          imageAlt: 'Handshake',
+          context: {
+            'k2': "An adult says hello and puts out their hand.",
+            '3-5': "Someone's parent reaches out to shake your hand.",
+            '6-8': "You're meeting your friend's parents for the first time.",
+            '9-12': "You're at a professional or formal introduction."
+          },
+          prompt: {
+            'k2': "What do you do?",
+            '3-5': "How do you respond?",
+            '6-8': "What's the appropriate greeting?",
+            '9-12': "How do you execute a proper handshake?"
+          },
+          options: [
+            {
+              text: {
+                'k2': "*Shake their hand and smile*",
+                '3-5': "*Shake their hand firmly and say 'Nice to meet you!'*",
+                '6-8': "*Firm handshake, eye contact, 'Nice to meet you, Mr./Mrs. ___'*",
+                '9-12': "*Firm handshake, direct eye contact, confident greeting with name*"
+              },
+              feedback: {
+                'k2': "Perfect! Shaking hands is polite and friendly!",
+                '3-5': "Excellent! That's a great, confident greeting!",
+                '6-8': "Great! Professional and respectful introduction.",
+                '9-12': "Ideal! This demonstrates confidence and social competence."
+              },
+              proTip: {
+                'k2': "Pro Tip: When shaking hands, hold firm but don't squeeze too hard!",
+                '3-5': "Pro Tip: Good handshake: web-to-web contact, 2-3 shakes, smile, eye contact!",
+                '6-8': "Pro Tip: Handshake formula: firm grip (not crushing), 2-3 pumps, eye contact, smile, verbal greeting.",
+                '9-12': "Pro Tip: Perfect handshake: web-to-web contact, firm pressure (match theirs), 2-3 seconds, release. Make eye contact throughout."
+              },
+              isGood: true,
+              points: 10
+            },
+            {
+              text: {
+                'k2': "*Don't shake, just wave from far away*",
+                '3-5': "*Ignore the hand and just say hi*",
+                '6-8': "*Leave them hanging, just nod*",
+                '9-12': "*Don't take their hand, just verbal greeting*"
+              },
+              feedback: {
+                'k2': "They're trying to shake your hand! It's polite to shake back!",
+                '3-5': "That's awkward! When someone offers their hand, shake it!",
+                '6-8': "Leaving someone's hand hanging is rude. Always reciprocate.",
+                '9-12': "Refusing a handshake without reason (pandemic, cultural, etc.) is a significant social error."
+              },
+              proTip: {
+                'k2': "Pro Tip: When someone puts out their hand, hold it and shake it gently!",
+                '3-5': "Pro Tip: Always shake hands when offered! It shows respect and confidence!",
+                '6-8': "Pro Tip: Handshake rejection signals disrespect or social awkwardness. Even if uncomfortable, reciprocate.",
+                '9-12': "Pro Tip: Handshake refusal is a major social violation in Western culture. If you have valid reasons (germophobic, pandemic), verbally acknowledge."
+              },
+              isGood: false,
+              points: 0
+            },
+            {
+              text: {
+                'k2': "*Shake with just your fingers, really loose*",
+                '3-5': "*Give a really weak, limp handshake*",
+                '6-8': "*Dead fish handshake - limp and passive*",
+                '9-12': "*Limp, fingerless handshake without grip*"
+              },
+              feedback: {
+                'k2': "That's too loose! Hold their hand a little tighter!",
+                '3-5': "Too weak! A limp handshake seems unconfident!",
+                '6-8': "Weak handshakes project low confidence and disinterest.",
+                '9-12': "The 'dead fish' handshake is infamous for projecting weakness and disengagement."
+              },
+              proTip: {
+                'k2': "Pro Tip: Use your whole hand, not just fingers! Hold firm but gentle!",
+                '3-5': "Pro Tip: A good handshake is firm but not too tight! Practice makes perfect!",
+                '6-8': "Pro Tip: Aim for medium-firm pressure - firm enough to show confidence, gentle enough to be comfortable.",
+                '9-12': "Pro Tip: Match pressure to theirs. Generally aim for firm but not aggressive. Web-to-web contact is essential."
+              },
+              isGood: false,
+              points: 3
+            },
+            {
+              text: {
+                'k2': "*Squeeze their hand really, really tight*",
+                '3-5': "*Crush their hand with a super strong grip*",
+                '6-8': "*Overly aggressive, dominant handshake*",
+                '9-12': "*Bone-crushing grip, aggressive power play*"
+              },
+              feedback: {
+                'k2': "Too tight! That might hurt them! Be more gentle!",
+                '3-5': "Ouch! That's too strong! Firm but not crushing!",
+                '6-8': "Overly aggressive handshakes project insecurity masked as dominance.",
+                '9-12': "Power-play handshakes are transparent attempts at dominance and signal insecurity."
+              },
+              proTip: {
+                'k2': "Pro Tip: Don't squeeze too hard! Pretend you're holding a small bird - firm but gentle!",
+                '3-5': "Pro Tip: Firm doesn't mean crushing! Just solid and confident!",
+                '6-8': "Pro Tip: Aggressive handshakes backfire - they signal trying too hard, not confidence.",
+                '9-12': "Pro Tip: Bone-crushing grips are universally disliked and seen as overcompensation. Firm and respectful wins."
+              },
+              isGood: false,
+              points: 1
+            }
+          ]
+        },
+        // SCENARIO 6: Nervous Habits to Avoid
+        {
+          id: 6,
+          image: 'https://images.unsplash.com/photo-1551836022-deb4988cc6c0?w=800&q=80',
+          imageAlt: 'Nervous habits',
+          context: {
+            'k2': "You're waiting for your turn to show-and-tell and feeling nervous.",
+            '3-5': "You're about to give a presentation and you feel anxious.",
+            '6-8': "You're in a social situation and feeling uncomfortable.",
+            '9-12': "You're in an interview or important conversation and feeling stressed."
+          },
+          prompt: {
+            'k2': "What should you NOT do?",
+            '3-5': "What nervous habits should you avoid?",
+            '6-8': "What behaviors should you be aware of?",
+            '9-12': "What anxiety tells do you need to manage?"
+          },
+          options: [
+            {
+              text: {
+                'k2': "*Take a deep breath and keep hands still*",
+                '3-5': "*Take slow breaths and rest hands calmly*",
+                '6-8': "*Breathe deliberately, maintain still, open posture*",
+                '9-12': "*Practice box breathing, maintain composed posture, hands visible but still*"
+              },
+              feedback: {
+                'k2': "Great! Staying calm helps you feel better!",
+                '3-5': "Perfect! Controlling your breath helps control your nerves!",
+                '6-8': "Excellent! Managing physical symptoms reduces visible anxiety.",
+                '9-12': "Ideal! Physiological regulation reduces both anxiety and its visible signs."
+              },
+              proTip: {
+                'k2': "Pro Tip: When nervous, take big slow breaths! It helps you calm down!",
+                '3-5': "Pro Tip: Deep breathing trick: breathe in for 4, hold for 4, out for 4. Do it 3 times!",
+                '6-8': "Pro Tip: Box breathing (4-4-4-4) activates parasympathetic nervous system and reduces anxiety fast.",
+                '9-12': "Pro Tip: Physiological sigh (double inhale, long exhale) most rapidly reduces stress. Practice before high-pressure situations."
+              },
+              isGood: true,
+              points: 10
+            },
+            {
+              text: {
+                'k2': "*Bite nails or pick at fingers*",
+                '3-5': "*Fidget constantly, tap feet, bite nails*",
+                '6-8': "*Constant fidgeting, nail biting, hair twirling*",
+                '9-12': "*Visible nervous tics: nail biting, leg bouncing, finger drumming*"
+              },
+              feedback: {
+                'k2': "Try not to do that! It shows you're nervous!",
+                '3-5': "Those habits show everyone you're anxious! Try to stay still!",
+                '6-8': "Nervous habits broadcast anxiety and distract others from your message.",
+                '9-12': "Visible anxiety tells undermine your message and project lack of confidence."
+              },
+              proTip: {
+                'k2': "Pro Tip: If you want to move your hands, hold them together or hold something!",
+                '3-5': "Pro Tip: If you need to do something with your hands, clasp them or hold a pen!",
+                '6-8': "Pro Tip: Redirect nervous energy: squeeze hands together, press feet into floor, or hold something discreet.",
+                '9-12': "Pro Tip: Channel nervous energy productively: deliberate hand gestures, subtle muscle tension/release, or grounding techniques."
+              },
+              isGood: false,
+              points: 0
+            },
+            {
+              text: {
+                'k2': "*Hide face behind hands*",
+                '3-5': "*Cover face, avoid all eye contact*",
+                '6-8': "*Hide behind hair, complete avoidance posture*",
+                '9-12': "*Physical withdrawal, barrier postures, face covering*"
+              },
+              feedback: {
+                'k2': "That makes it hard to see you! Try to keep your face visible!",
+                '3-5': "Hiding makes you seem more nervous! Stand tall instead!",
+                '6-8': "Avoidance behaviors amplify perception of anxiety. Open posture is better.",
+                '9-12': "Retreat behaviors signal extreme discomfort and invite others' anxiety."
+              },
+              proTip: {
+                'k2': "Pro Tip: Even if you're nervous, let people see your face! You can do it!",
+                '3-5': "Pro Tip: Hiding makes nerves worse! Face your fear - it gets easier every time!",
+                '6-8': "Pro Tip: Exposure reduces anxiety over time. Each time you maintain open posture despite nerves, it gets easier.",
+                '9-12': "Pro Tip: Avoidance maintains anxiety. Approach with discomfort (open posture despite fear) is the only path to confidence."
+              },
+              isGood: false,
+              points: 0
+            }
+          ]
+        }
+      ]
     }
   };
   
