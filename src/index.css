@@ -15,3 +15,77 @@ body {
   background: #000000;
   color: white;
 }
+
+/* Animation Classes */
+@keyframes fadeIn {
+  from { 
+    opacity: 0; 
+    transform: translateY(20px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes slideUp {
+  from { 
+    opacity: 0; 
+    transform: translateY(30px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes bounce-up {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-10px);
+  }
+  60% {
+    transform: translateY(-5px);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.6s ease-out;
+}
+
+.animate-bounce-up {
+  animation: bounce-up 1s ease-out;
+}
+
+/* Staggered animations */
+.animate-slideUp:nth-child(1) { animation-delay: 0ms; }
+.animate-slideUp:nth-child(2) { animation-delay: 100ms; }
+.animate-slideUp:nth-child(3) { animation-delay: 200ms; }
+.animate-slideUp:nth-child(4) { animation-delay: 300ms; }
+.animate-slideUp:nth-child(5) { animation-delay: 400ms; }
+.animate-slideUp:nth-child(6) { animation-delay: 500ms; }
+
+/* Hover effects */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hover-lift:hover {
+  transform: scale(1.02);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+.hover-glow {
+  transition: all 0.2s ease;
+}
+
+.hover-glow:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+}

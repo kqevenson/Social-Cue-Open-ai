@@ -88,9 +88,9 @@ function HomeScreen({ userData, onNavigate, darkMode, soundEffects }) {
         <section className="mb-8">
           <div className="grid grid-cols-3 gap-3">
             {stats.map((stat, i) => (
-              <div key={i} className={`backdrop-blur-xl border rounded-2xl p-4 transition-all text-center ${
+              <div key={i} className={`backdrop-blur-xl border rounded-2xl p-4 transition-all duration-200 text-center hover:scale-105 hover:shadow-lg animate-slideUp ${
                 darkMode ? 'bg-white/8 border-white/20 hover:bg-white/12' : 'bg-white border-gray-200 hover:bg-gray-50 shadow-sm'
-              }`}>
+              }`} style={{ animationDelay: `${i * 100}ms` }}>
                 <div className={`text-3xl font-bold bg-gradient-to-r ${stat.gradient} bg-clip-text text-transparent mb-1`}>{stat.value}</div>
                 <div className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{stat.label}</div>
               </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import LandingPage from './components/LandingPage';
 import OnboardingScreen from './components/OnboardingScreen';
 import SocialCueApp from './components/SocialCueApp';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
   const [appState, setAppState] = useState('landing');
@@ -9,16 +10,22 @@ function App() {
 
   // Check if user has already completed onboarding
   useEffect(() => {
-    const storedUser = localStorage.getItem('socialCueUserData');
-    if (storedUser) {
-      try {
+    try {
+      const storedUser = localStorage.getItem('socialCueUserData');
+      if (storedUser) {
         const parsed = JSON.parse(storedUser);
         if (parsed.userName && parsed.gradeLevel) {
           setUserData(parsed);
           setAppState('app');
         }
-      } catch (error) {
-        console.error('Error parsing stored user data:', error);
+      }
+    } catch (error) {
+      console.error('Error loading stored user data:', error);
+      // Clear corrupted data
+      try {
+        localStorage.removeItem('socialCueUserData');
+      } catch (clearError) {
+        console.error('Error clearing corrupted data:', clearError);
       }
     }
   }, []);
@@ -28,46 +35,54 @@ function App() {
   };
 
   const handleOnboardingComplete = (data) => {
-    const userDataToSave = {
-      userName: data.name || 'User',
-      gradeLevel: data.gradeLevel || '6',
-      role: data.role || 'learner',
-      email: data.email || '',
-      accountType: data.accountType || 'guest',
-      streak: 0,
-      totalSessions: 0,
-      totalPoints: 0,
-      confidenceScore: 0,
-      completedSessions: [],
-      lastActiveDate: new Date().toDateString()
-    };
+    try {
+      const userDataToSave = {
+        userName: data.name || 'User',
+        gradeLevel: data.gradeLevel || '6',
+        role: data.role || 'learner',
+        email: data.email || '',
+        accountType: data.accountType || 'guest',
+        streak: 0,
+        totalSessions: 0,
+        totalPoints: 0,
+        confidenceScore: 0,
+        completedSessions: [],
+        lastActiveDate: new Date().toDateString()
+      };
 
-    localStorage.setItem('socialCueUserData', JSON.stringify(userDataToSave));
-    setUserData(data);
-    setAppState('app');
+      localStorage.setItem('socialCueUserData', JSON.stringify(userDataToSave));
+      setUserData(data);
+      setAppState('app');
+    } catch (error) {
+      console.error('Error saving user data:', error);
+      // Still proceed with app state change, but data might not be saved
+      setUserData(data);
+      setAppState('app');
+    }
   };
 
   const handleLogout = () => {
     if (confirm('Are you sure you want to log out?')) {
-      localStorage.clear();
-      setUserData(null);
-      setAppState('landing');
+      try {
+        localStorage.clear();
+        setUserData(null);
+        setAppState('landing');
+      } catch (error) {
+        console.error('Error during logout:', error);
+        // Still proceed with state changes
+        setUserData(null);
+        setAppState('landing');
+      }
     }
   };
 
-  if (appState === 'landing') {
-    return <LandingPage onGetStarted={handleGetStarted} />;
-  }
-
-  if (appState === 'onboarding') {
-    return <OnboardingScreen onComplete={handleOnboardingComplete} />;
-  }
-
-  if (appState === 'app') {
-    return <SocialCueApp onLogout={handleLogout} />;
-  }
-
-  return null;
+  return (
+    <ErrorBoundary>
+      {appState === 'landing' && <LandingPage onGetStarted={handleGetStarted} />}
+      {appState === 'onboarding' && <OnboardingScreen onComplete={handleOnboardingComplete} />}
+      {appState === 'app' && <SocialCueApp onLogout={handleLogout} />}
+    </ErrorBoundary>
+  );
 }
 
 export default App;

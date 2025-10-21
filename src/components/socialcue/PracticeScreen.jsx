@@ -23,10 +23,10 @@ function PracticeScreen({ onNavigate, darkMode }) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {categories.map(category => (
-            <div key={category.id} className={`backdrop-blur-xl border rounded-3xl overflow-hidden transition-all cursor-pointer group ${
+          {categories.map((category, index) => (
+            <div key={category.id} className={`backdrop-blur-xl border rounded-3xl overflow-hidden transition-all duration-200 cursor-pointer group hover:scale-105 hover:shadow-2xl animate-slideUp ${
               darkMode ? 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/8' : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50 shadow-sm'
-            }`}>
+            }`} style={{ animationDelay: `${index * 100}ms` }}>
               <div className="p-8">
                 <div className="flex items-start justify-between mb-6">
                   <div className="w-16 h-16 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"

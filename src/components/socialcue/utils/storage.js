@@ -13,27 +13,89 @@ export const getDefaultUserData = () => ({
 export const getUserData = () => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return JSON.parse(stored);
-    const defaultData = getDefaultUserData();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultData));
-    return defaultData;
+    if (!stored) {
+      const defaultData = getDefaultUserData();
+      saveUserData(defaultData);
+      return defaultData;
+    }
+    
+    const parsed = JSON.parse(stored);
+    
+    // Validate the parsed data structure
+    if (!parsed || typeof parsed !== 'object') {
+      console.warn('Invalid user data structure, using defaults');
+      const defaultData = getDefaultUserData();
+      saveUserData(defaultData);
+      return defaultData;
+    }
+    
+    return parsed;
   } catch (error) {
-    return getDefaultUserData();
+    console.error('Failed to load user data:', error);
+    const defaultData = getDefaultUserData();
+    saveUserData(defaultData);
+    return defaultData;
   }
 };
 
 export const getSessionProgress = (sessionId) => {
-  const userData = getUserData();
-  const session = userData.completedSessions?.find(s => s.id === sessionId);
-  return session ? (session.progress || 100) : 0;
+  try {
+    const userData = getUserData();
+    if (!userData || !userData.completedSessions) {
+      return 0;
+    }
+    
+    const session = userData.completedSessions.find(s => s.id === sessionId);
+    return session ? (session.progress || 0) : 0;
+  } catch (error) {
+    console.error('Failed to get session progress:', error);
+    return 0;
+  }
 };
 
 export const saveUserData = (userData) => {
   try {
+    if (!userData || typeof userData !== 'object') {
+      console.error('Invalid user data provided for saving');
+      return false;
+    }
+    
     localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
     return true;
   } catch (error) {
-    console.error('Error saving user data:', error);
+    console.error('Failed to save user data:', error);
+    
+    // Check if localStorage is available
+    if (error.name === 'QuotaExceededError') {
+      console.error('localStorage quota exceeded');
+    } else if (error.name === 'SecurityError') {
+      console.error('localStorage access denied (private browsing mode)');
+    }
+    
+    return false;
+  }
+};
+
+// Check if localStorage is available
+export const isLocalStorageAvailable = () => {
+  try {
+    const test = '__localStorage_test__';
+    localStorage.setItem(test, test);
+    localStorage.removeItem(test);
+    return true;
+  } catch (error) {
+    console.warn('localStorage is not available:', error);
+    return false;
+  }
+};
+
+// Clear all user data (for testing/debugging)
+export const clearUserData = () => {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    return true;
+  } catch (error) {
+    console.error('Failed to clear user data:', error);
     return false;
   }
 };

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, ArrowLeft, CheckCircle, XCircle, RotateCcw, Lightbulb, Volume2, VolumeX, Home } from 'lucide-react';
+import { ArrowRight, ArrowLeft, CheckCircle, XCircle, RotateCcw, Lightbulb, Volume2, VolumeX, Home, Info } from 'lucide-react';
 import { getUserData, STORAGE_KEY } from './utils/storage';
 import { getGradeRange } from './utils/helpers';
 import scenarios from './utils/scenarios';
+import SuccessAnimation from './animations/SuccessAnimation';
+import LoadingSpinner from './animations/LoadingSpinner';
 
 function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEffects, autoReadText }) {
   const [currentSituation, setCurrentSituation] = useState(0);
@@ -12,6 +14,8 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
   const [sessionComplete, setSessionComplete] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [autoRead, setAutoRead] = useState(autoReadText);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const gradeRange = getGradeRange(gradeLevel);
   const scenario = scenarios[sessionId] || scenarios[1];
@@ -162,6 +166,7 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
     if (option.isGood) {
       setTotalPoints(prev => prev + option.points);
       playSound('correct');
+      setShowCelebration(true);
     } else {
       playSound('incorrect');
     }
@@ -287,8 +292,8 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
           <div className="mb-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 shadow-lg">
-                  <img src={situation.image} alt={situation.imageAlt} className="w-full h-full object-cover" />
+                <div className="w-24 h-24 rounded-xl flex-shrink-0 shadow-lg bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center">
+                  {scenario.icon && React.createElement(scenario.icon, { className: "w-12 h-12 text-white" })}
                 </div>
                 <div className={`text-sm font-bold ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
                   {gradeRange === 'k2' ? 'STORY' : 'SCENARIO'}
@@ -317,7 +322,7 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
             {situation.options.map((option, index) => {
               const optionText = getContent(option.text);
               return (
-                <button key={index} onClick={() => handleOptionSelect(index)} disabled={showFeedback} className={`w-full text-left p-5 rounded-2xl border-2 transition-all ${
+                <button key={index} onClick={() => handleOptionSelect(index)} disabled={showFeedback} className={`w-full text-left p-5 rounded-2xl border-2 transition-all duration-200 hover:scale-105 hover:shadow-lg ${
                   selectedOption === index ? (option.isGood ? 'border-emerald-500 bg-emerald-500/10' : 'border-red-500 bg-red-500/10') :
                   darkMode ? 'border-white/20 hover:border-white/40 hover:bg-white/5' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                 } ${showFeedback && selectedOption !== index ? 'opacity-50' : ''}`}>
@@ -427,6 +432,14 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
         }
         .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
       `}</style>
+      
+      {/* Celebration Animation */}
+      {showCelebration && (
+        <SuccessAnimation 
+          points={situation.options[selectedOption]?.points || 10}
+          onComplete={() => setShowCelebration(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,7 +1,15 @@
 // Practice Session scenarios
+import { 
+  MessageCircle, MessageSquare, Users, UserPlus, Speech, Smile,
+  Ear, Eye, Heart, Headphones, Focus, Waves,
+  User, Hand, Sparkles, Target,
+  Star, Zap, TrendingUp, Award, Shield, Flame
+} from 'lucide-react';
+
 const scenarios = {
     1: {
       id: 1,
+      icon: MessageCircle,
       title: {
         'k2': 'Making Friends',
         '3-5': 'Small Talk Mastery',
@@ -13,8 +21,7 @@ const scenarios = {
       situations: [
         {
           id: 1,
-          image: 'https://images.unsplash.com/photo-1577896851231-70ef18881754?w=800&q=80',
-          imageAlt: 'Students at lunch',
+          icon: UserPlus,
           context: {
             'k2': "You notice a classmate sitting by themselves at lunch. You'd like to be friendly and sit with them.",
             '3-5': "You're in the cafeteria and see someone from your class sitting alone. You're thinking about joining them.",
@@ -93,8 +100,7 @@ const scenarios = {
         },
         {
           id: 2,
-          image: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=800&q=80',
-          imageAlt: 'Children playing together',
+          icon: MessageSquare,
           context: {
             'k2': "Your new friend mentions they like dinosaurs. You like dinosaurs too!",
             '3-5': "The person you're talking with mentions they enjoy playing video games. You play games too!",
@@ -151,8 +157,7 @@ const scenarios = {
         },
         {
           id: 3,
-          image: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=800&q=80',
-          imageAlt: 'Friends saying goodbye',
+          icon: Users,
           context: {
             'k2': "You've had a nice time playing together, and now it's time to go.",
             '3-5': "You've been having a good conversation, and now you need to head to your next class.",
@@ -210,8 +215,6 @@ const scenarios = {
         // SCENARIO 4: Keeping Conversations Going
         {
           id: 4,
-          image: 'https://images.unsplash.com/photo-1577896851231-70ef18881754?w=800&q=80',
-          imageAlt: 'People in conversation',
           context: {
             'k2': "You started talking to someone and now it's quiet. What do you do?",
             '3-5': "You've been chatting for a minute, but now there's an awkward silence.",
@@ -318,8 +321,6 @@ const scenarios = {
         // SCENARIO 5: Joining an Ongoing Conversation
         {
           id: 5,
-          image: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=800&q=80',
-          imageAlt: 'Group conversation',
           context: {
             'k2': "Some kids are talking about a movie. You've seen it too!",
             '3-5': "A group is talking about something you know about.",
@@ -426,8 +427,6 @@ const scenarios = {
         // SCENARIO 6: Handling Interruptions
         {
           id: 6,
-          image: 'https://images.unsplash.com/photo-1517898717222-37dd902c63e1?w=800&q=80',
-          imageAlt: 'Person being interrupted',
           context: {
             'k2': "You're telling a story, but someone keeps interrupting you.",
             '3-5': "You're sharing something important, but a friend keeps cutting you off.",
@@ -534,8 +533,6 @@ const scenarios = {
         // SCENARIO 7: Giving Compliments
         {
           id: 7,
-          image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=800&q=80',
-          imageAlt: 'Person giving compliment',
           context: {
             'k2': "You notice your friend did something really cool!",
             '3-5': "Someone in your class did something impressive that you noticed.",
@@ -642,8 +639,6 @@ const scenarios = {
         // SCENARIO 8: Receiving Compliments
         {
           id: 8,
-          image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80',
-          imageAlt: 'Person receiving compliment',
           context: {
             'k2': "Someone says you did something really well!",
             '3-5': "A friend gives you a nice compliment about something you did.",
@@ -750,8 +745,6 @@ const scenarios = {
         // SCENARIO 9: Ending Conversations Gracefully
         {
           id: 9,
-          image: 'https://images.unsplash.com/photo-1551836022-deb4988cc6c0?w=800&q=80',
-          imageAlt: 'People ending conversation',
           context: {
             'k2': "You need to go to lunch, but your friend is still talking.",
             '3-5': "You need to get to class, but the conversation is still going.",
@@ -860,6 +853,7 @@ const scenarios = {
     // CATEGORY 2: ACTIVE LISTENING
     2: {
       id: 2,
+      icon: Ear,
       title: {
         'k2': 'Listening Skills',
         '3-5': 'Active Listening',
@@ -872,8 +866,7 @@ const scenarios = {
         // SCENARIO 1: Showing You're Listening (Body Language + Verbal)
         {
           id: 1,
-          image: 'https://images.unsplash.com/photo-1577896851231-70ef18881754?w=800&q=80',
-          imageAlt: 'Active listening',
+          icon: Headphones,
           context: {
             'k2': "Your friend is telling you about their new puppy.",
             '3-5': "A classmate is sharing a story about their weekend trip.",
@@ -980,8 +973,7 @@ const scenarios = {
         // SCENARIO 2: Asking Follow-Up Questions
         {
           id: 2,
-          image: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=800&q=80',
-          imageAlt: 'Asking questions',
+          icon: Focus,
           context: {
             'k2': "Your friend says 'I went to the park yesterday!'",
             '3-5': "Someone mentions 'I started learning guitar.'",
@@ -1088,8 +1080,6 @@ const scenarios = {
         // SCENARIO 3: Paraphrasing to Show Understanding
         {
           id: 3,
-          image: 'https://images.unsplash.com/photo-1517898717222-37dd902c63e1?w=800&q=80',
-          imageAlt: 'Understanding others',
           context: {
             'k2': "Your friend says: 'I'm sad because I lost my favorite toy.'",
             '3-5': "Someone says: 'I'm nervous about the test tomorrow because I don't understand fractions.'",
@@ -1196,8 +1186,6 @@ const scenarios = {
         // SCENARIO 4: Not Interrupting
         {
           id: 4,
-          image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=800&q=80',
-          imageAlt: 'Not interrupting',
           context: {
             'k2': "Your friend is telling you a long story about their birthday party.",
             '3-5': "Someone is explaining something important that happened to them.",
@@ -1304,8 +1292,6 @@ const scenarios = {
         // SCENARIO 5: Managing Distractions
         {
           id: 5,
-          image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80',
-          imageAlt: 'Managing distractions',
           context: {
             'k2': "Your friend is talking, but there's a fun game happening nearby.",
             '3-5': "Someone is sharing something important, but your phone keeps buzzing.",
@@ -1412,8 +1398,6 @@ const scenarios = {
         // SCENARIO 6: Empathetic Responses
         {
           id: 6,
-          image: 'https://images.unsplash.com/photo-1551836022-deb4988cc6c0?w=800&q=80',
-          imageAlt: 'Empathetic listening',
           context: {
             'k2': "Your friend is crying because they're moving away.",
             '3-5': "Someone is upset because they didn't make the team they tried out for.",
@@ -1522,6 +1506,7 @@ const scenarios = {
     // CATEGORY 3: BODY LANGUAGE
     3: {
       id: 3,
+      icon: Eye,
       title: {
         'k2': 'Body Language',
         '3-5': 'Reading Bodies',
@@ -1534,8 +1519,6 @@ const scenarios = {
         // SCENARIO 1: Eye Contact Basics
         {
           id: 1,
-          image: 'https://images.unsplash.com/photo-1577896851231-70ef18881754?w=800&q=80',
-          imageAlt: 'Eye contact',
           context: {
             'k2': "You're talking to your teacher.",
             '3-5': "You're having a conversation with a friend.",
@@ -1620,8 +1603,6 @@ const scenarios = {
         // SCENARIO 2: Reading Facial Expressions
         {
           id: 2,
-          image: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=800&q=80',
-          imageAlt: 'Reading expressions',
           context: {
             'k2': "Someone's face looks like this: 😠 with crossed arms.",
             '3-5': "You see a classmate with a frown and slumped shoulders.",
@@ -1706,8 +1687,6 @@ const scenarios = {
         // SCENARIO 3: Personal Space Boundaries
         {
           id: 3,
-          image: 'https://images.unsplash.com/photo-1517898717222-37dd902c63e1?w=800&q=80',
-          imageAlt: 'Personal space',
           context: {
             'k2': "You're excited to talk to a new friend!",
             '3-5': "You want to show someone something on your tablet.",
@@ -1792,8 +1771,6 @@ const scenarios = {
         // SCENARIO 4: Confident Posture
         {
           id: 4,
-          image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=800&q=80',
-          imageAlt: 'Confident posture',
           context: {
             'k2': "You're meeting your new teacher for the first time.",
             '3-5': "You're introducing yourself to a new student.",
@@ -1878,8 +1855,6 @@ const scenarios = {
         // SCENARIO 5: Handshakes and Greetings
         {
           id: 5,
-          image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80',
-          imageAlt: 'Handshake',
           context: {
             'k2': "An adult says hello and puts out their hand.",
             '3-5': "Someone's parent reaches out to shake your hand.",
@@ -1986,8 +1961,6 @@ const scenarios = {
         // SCENARIO 6: Nervous Habits to Avoid
         {
           id: 6,
-          image: 'https://images.unsplash.com/photo-1551836022-deb4988cc6c0?w=800&q=80',
-          imageAlt: 'Nervous habits',
           context: {
             'k2': "You're waiting for your turn to show-and-tell and feeling nervous.",
             '3-5': "You're about to give a presentation and you feel anxious.",
@@ -2074,6 +2047,7 @@ const scenarios = {
     // CATEGORY 4: CONFIDENCE BUILDING
     4: {
       id: 4,
+      icon: Star,
       title: {
         'k2': 'Confidence Building',
         '3-5': 'Building Confidence',
@@ -2086,8 +2060,6 @@ const scenarios = {
         // SCENARIO 1: Speaking Up in Groups
         {
           id: 1,
-          image: 'https://images.unsplash.com/photo-1577896851231-70ef18881754?w=800&q=80',
-          imageAlt: 'Speaking up in groups',
           context: {
             'k2': "Your class is talking about favorite animals and you have an idea!",
             '3-5': "Your group is discussing what game to play and you have a suggestion.",
@@ -2194,8 +2166,6 @@ const scenarios = {
         // SCENARIO 2: Handling Embarrassment
         {
           id: 2,
-          image: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=800&q=80',
-          imageAlt: 'Handling embarrassment',
           context: {
             'k2': "You tripped and fell in front of other kids.",
             '3-5': "You gave a wrong answer in class and some kids laughed.",
@@ -2302,8 +2272,6 @@ const scenarios = {
         // SCENARIO 3: Accepting Compliments
         {
           id: 3,
-          image: 'https://images.unsplash.com/photo-1517898717222-37dd902c63e1?w=800&q=80',
-          imageAlt: 'Accepting compliments',
           context: {
             'k2': "Someone says 'I like your drawing! It's really good!'",
             '3-5': "A classmate says 'You're really good at soccer!'",
@@ -2410,8 +2378,6 @@ const scenarios = {
         // SCENARIO 4: Standing Up for Yourself
         {
           id: 4,
-          image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=800&q=80',
-          imageAlt: 'Standing up for yourself',
           context: {
             'k2': "Someone cuts in line in front of you.",
             '3-5': "A classmate takes your pencil without asking.",
@@ -2518,8 +2484,6 @@ const scenarios = {
         // SCENARIO 5: Trying New Things Socially
         {
           id: 5,
-          image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80',
-          imageAlt: 'Trying new things',
           context: {
             'k2': "You're invited to play a new game you've never played before.",
             '3-5': "Someone invites you to join their club or activity.",
@@ -2626,8 +2590,6 @@ const scenarios = {
         // SCENARIO 6: Recovery from Social Mistakes
         {
           id: 6,
-          image: 'https://images.unsplash.com/photo-1551836022-deb4988cc6c0?w=800&q=80',
-          imageAlt: 'Recovery from mistakes',
           context: {
             'k2': "You accidentally said something that hurt a friend's feelings.",
             '3-5': "You forgot someone's name right after they told you.",
@@ -2735,4 +2697,46 @@ const scenarios = {
     }
   };
   
-  export default scenarios;
+  // Error handling for scenario loading
+export const loadScenario = (scenarioId) => {
+  try {
+    const scenario = scenarios[scenarioId];
+    if (!scenario) {
+      console.error(`Scenario ${scenarioId} not found`);
+      return null;
+    }
+    
+    // Validate scenario structure
+    if (!scenario.id || !scenario.title || !scenario.situations) {
+      console.error(`Invalid scenario structure for ID ${scenarioId}`);
+      return null;
+    }
+    
+    return scenario;
+  } catch (error) {
+    console.error('Failed to load scenario:', error);
+    return null;
+  }
+};
+
+export const getAllScenarios = () => {
+  try {
+    return Object.values(scenarios).filter(scenario => 
+      scenario && scenario.id && scenario.title && scenario.situations
+    );
+  } catch (error) {
+    console.error('Failed to load scenarios:', error);
+    return [];
+  }
+};
+
+export const getScenarioCount = () => {
+  try {
+    return Object.keys(scenarios).length;
+  } catch (error) {
+    console.error('Failed to count scenarios:', error);
+    return 0;
+  }
+};
+
+export default scenarios;

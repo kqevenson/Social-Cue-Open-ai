@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, AlertCircle } from 'lucide-react';
+import ErrorToast from './ErrorToast';
 
 function OnboardingScreen({ onComplete }) {
   const [step, setStep] = useState(1);
@@ -11,12 +12,80 @@ function OnboardingScreen({ onComplete }) {
     password: ''
   });
   const [isVisible, setIsVisible] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [showErrorToast, setShowErrorToast] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     setIsVisible(false);
     const timer = setTimeout(() => setIsVisible(true), 50);
     return () => clearTimeout(timer);
   }, [step]);
+
+  // Validation functions
+  const validateName = (name) => {
+    if (!name || name.trim().length === 0) {
+      return "Please enter your name";
+    }
+    if (name.trim().length < 2) {
+      return "Name must be at least 2 characters";
+    }
+    if (name.trim().length > 50) {
+      return "Name must be less than 50 characters";
+    }
+    return null;
+  };
+
+  const validateEmail = (email) => {
+    if (!email || email.trim().length === 0) {
+      return "Please enter your email";
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return "Please enter a valid email address";
+    }
+    return null;
+  };
+
+  const validateGradeLevel = (gradeLevel) => {
+    if (!gradeLevel) {
+      return "Please select your grade level";
+    }
+    return null;
+  };
+
+  const validateRole = (role) => {
+    if (!role) {
+      return "Please select your role";
+    }
+    return null;
+  };
+
+  const validateStep = (stepNumber) => {
+    const newErrors = {};
+    
+    switch (stepNumber) {
+      case 1:
+        const roleError = validateRole(userData.role);
+        if (roleError) newErrors.role = roleError;
+        break;
+      case 2:
+        const nameError = validateName(userData.name);
+        if (nameError) newErrors.name = nameError;
+        break;
+      case 3:
+        const gradeError = validateGradeLevel(userData.gradeLevel);
+        if (gradeError) newErrors.gradeLevel = gradeError;
+        break;
+      case 4:
+        const emailError = validateEmail(userData.email);
+        if (emailError) newErrors.email = emailError;
+        break;
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const roles = [
     { 
@@ -54,6 +123,8 @@ function OnboardingScreen({ onComplete }) {
 
   const handleRoleSelect = (roleId) => {
     setUserData({ ...userData, role: roleId });
+    setErrors({}); // Clear any previous errors
+    
     if (roleId === 'learner') {
       setStep(2);
     } else {
@@ -63,23 +134,36 @@ function OnboardingScreen({ onComplete }) {
 
   const handleGradeSelect = (gradeId) => {
     setUserData({ ...userData, gradeLevel: gradeId });
+    setErrors({}); // Clear any previous errors
     setStep(3);
   };
 
   const handleNameSubmit = () => {
-    if (userData.name.trim()) {
+    if (validateStep(2)) {
       setStep(4);
+    } else {
+      setErrorMessage('Please fix the errors above');
+      setShowErrorToast(true);
     }
   };
 
   const handleSignUp = () => {
-    if (userData.email.trim() && userData.password.trim()) {
-      const finalData = { 
-        ...userData, 
-        gradeLevel: userData.gradeLevel || 'adult',
-        accountType: 'registered'
-      };
-      onComplete(finalData);
+    if (validateStep(4)) {
+      try {
+        const finalData = { 
+          ...userData, 
+          gradeLevel: userData.gradeLevel || 'adult',
+          accountType: 'registered'
+        };
+        onComplete(finalData);
+      } catch (error) {
+        console.error('Error completing signup:', error);
+        setErrorMessage('Failed to complete signup. Please try again.');
+        setShowErrorToast(true);
+      }
+    } else {
+      setErrorMessage('Please fix the errors above');
+      setShowErrorToast(true);
     }
   };
 
@@ -213,10 +297,24 @@ function OnboardingScreen({ onComplete }) {
                 type="text"
                 placeholder="Enter your name"
                 value={userData.name}
-                onChange={(e) => setUserData({ ...userData, name: e.target.value })}
-                className="w-full px-6 py-4 bg-black/40 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors text-lg mb-6"
+                onChange={(e) => {
+                  setUserData({ ...userData, name: e.target.value });
+                  if (errors.name) {
+                    setErrors({ ...errors, name: null });
+                  }
+                }}
+                className={`w-full px-6 py-4 bg-black/40 border rounded-xl text-white placeholder-gray-500 focus:outline-none transition-colors text-lg mb-2 ${
+                  errors.name ? 'border-red-500 focus:border-red-500' : 'border-white/20 focus:border-blue-500'
+                }`}
                 autoFocus
               />
+              
+              {errors.name && (
+                <div className="text-red-400 text-sm mb-4 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />
+                  {errors.name}
+                </div>
+              )}
 
               <button
                 onClick={handleNameSubmit}
@@ -333,6 +431,16 @@ function OnboardingScreen({ onComplete }) {
           animation-delay: 0.15s;
         }
       `}</style>
+      
+      {/* Error Toast */}
+      {showErrorToast && (
+        <ErrorToast
+          message={errorMessage}
+          type="error"
+          onClose={() => setShowErrorToast(false)}
+          duration={4000}
+        />
+      )}
     </div>
   );
 }
