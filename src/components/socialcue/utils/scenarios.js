@@ -2070,6 +2070,668 @@ const scenarios = {
           ]
         }
       ]
+    },
+    // CATEGORY 4: CONFIDENCE BUILDING
+    4: {
+      id: 4,
+      title: {
+        'k2': 'Confidence Building',
+        '3-5': 'Building Confidence',
+        '6-8': 'Confidence Building',
+        '9-12': 'Self-Confidence'
+      },
+      color: '#14B8A6',
+      background: 'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)',
+      situations: [
+        // SCENARIO 1: Speaking Up in Groups
+        {
+          id: 1,
+          image: 'https://images.unsplash.com/photo-1577896851231-70ef18881754?w=800&q=80',
+          imageAlt: 'Speaking up in groups',
+          context: {
+            'k2': "Your class is talking about favorite animals and you have an idea!",
+            '3-5': "Your group is discussing what game to play and you have a suggestion.",
+            '6-8': "Your class is debating a topic and you have a perspective to share.",
+            '9-12': "You're in a group discussion and have relevant insight but feel hesitant."
+          },
+          prompt: {
+            'k2': "What do you do?",
+            '3-5': "Should you speak up?",
+            '6-8': "How do you contribute?",
+            '9-12': "What's your approach?"
+          },
+          options: [
+            {
+              text: {
+                'k2': "*Raise hand and share your idea*",
+                '3-5': "*Wait for a pause, then clearly state your suggestion*",
+                '6-8': "*'I have a thought on this' - then share your perspective*",
+                '9-12': "*'Building on that point...' or 'Different perspective...' - then contribute*"
+              },
+              feedback: {
+                'k2': "Great job! Sharing your ideas is important!",
+                '3-5': "Perfect! You waited for the right moment and spoke clearly!",
+                '6-8': "Excellent! You signaled your contribution and delivered confidently.",
+                '9-12': "Ideal! You've framed your contribution and asserted your perspective."
+              },
+              proTip: {
+                'k2': "Pro Tip: Your ideas are good! Always try to share them!",
+                '3-5': "Pro Tip: Wait for a quiet moment, take a breath, then speak clearly!",
+                '6-8': "Pro Tip: Entry phrases help: 'I think...', 'What if...', 'Has anyone considered...' signal you're adding value.",
+                '9-12': "Pro Tip: Frame contributions: 'counterpoint,' 'building on that,' 'different angle.' This positions your value-add."
+              },
+              isGood: true,
+              points: 10
+            },
+            {
+              text: {
+                'k2': "*Stay quiet even though you have an idea*",
+                '3-5': "*Keep your suggestion to yourself*",
+                '6-8': "*Remain silent despite having relevant input*",
+                '9-12': "*Self-censor and don't contribute*"
+              },
+              feedback: {
+                'k2': "Your idea is good! Don't be afraid to share it!",
+                '3-5': "You had something to offer! Speak up next time!",
+                '6-8': "By not contributing, you're denying the group your perspective.",
+                '9-12': "Self-silencing means missing opportunities and reinforcing insecurity."
+              },
+              proTip: {
+                'k2': "Pro Tip: Even if you're shy, your ideas matter! Try sharing just one thing!",
+                '3-5': "Pro Tip: Start small! Share one idea per day, even if it feels scary!",
+                '6-8': "Pro Tip: Nobody knows your insight is valuable until you share it. The only guaranteed failure is silence.",
+                '9-12': "Pro Tip: Confidence builds through action, not thought. Each time you speak up despite fear, it gets easier."
+              },
+              isGood: false,
+              points: 0
+            },
+            {
+              text: {
+                'k2': "*Whisper your idea to the person next to you*",
+                '3-5': "*Tell your friend your idea quietly instead of the group*",
+                '6-8': "*Share your thought with one person instead of the whole group*",
+                '9-12': "*Side conversation instead of group contribution*"
+              },
+              feedback: {
+                'k2': "That's okay, but the whole class would like to hear your idea!",
+                '3-5': "Your friend likes your idea - the whole group might too! Share with everyone!",
+                '6-8': "You had the courage to share, but limited your impact. Speak to the group.",
+                '9-12': "Private sharing is a halfway measure. Full participation requires public contribution."
+              },
+              proTip: {
+                'k2': "Pro Tip: It's okay to be nervous! Next time, try telling the whole class!",
+                '3-5': "Pro Tip: Practice! First share with one person, then a small group, then everyone!",
+                '6-8': "Pro Tip: Build gradually: share with friend → small group → full class. Each level builds confidence.",
+                '9-12': "Pro Tip: Proximate sharing is progress but not the goal. Use it as a stepping stone to full group contribution."
+              },
+              isGood: false,
+              points: 5
+            },
+            {
+              text: {
+                'k2': "*Shout out your idea really loud*",
+                '3-5': "*Interrupt everyone to share your idea immediately*",
+                '6-8': "*Talk over others without waiting for an opening*",
+                '9-12': "*Assert your perspective without regard for conversational flow*"
+              },
+              feedback: {
+                'k2': "Good energy, but wait your turn! Raise your hand!",
+                '3-5': "Great confidence, but don't interrupt! Wait for a pause!",
+                '6-8': "Confidence is good, but respect conversational flow. Wait for an opening.",
+                '9-12': "Assertiveness without social calibration comes across as domineering."
+              },
+              proTip: {
+                'k2': "Pro Tip: It's great to be excited! But wait for your turn to talk!",
+                '3-5': "Pro Tip: Confidence + patience = perfect! Wait for a quiet moment, then speak up!",
+                '6-8': "Pro Tip: True confidence respects others' space. Find natural pauses or explicitly request floor time.",
+                '9-12': "Pro Tip: Balance assertion with calibration. 'Can I jump in?' or waiting for natural breaks maintains respect."
+              },
+              isGood: false,
+              points: 4
+            }
+          ]
+        },
+        // SCENARIO 2: Handling Embarrassment
+        {
+          id: 2,
+          image: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=800&q=80',
+          imageAlt: 'Handling embarrassment',
+          context: {
+            'k2': "You tripped and fell in front of other kids.",
+            '3-5': "You gave a wrong answer in class and some kids laughed.",
+            '6-8': "You made a mistake during a presentation.",
+            '9-12': "You experienced a social mishap in front of peers."
+          },
+          prompt: {
+            'k2': "What should you do?",
+            '3-5': "How do you handle it?",
+            '6-8': "What's your response?",
+            '9-12': "How do you recover?"
+          },
+          options: [
+            {
+              text: {
+                'k2': "*Get up, laugh a little, and keep going*",
+                '3-5': "*Smile and say 'Oops!' and move on*",
+                '6-8': "*Acknowledge briefly with humor, then continue*",
+                '9-12': "*'Well, that was awkward!' - self-deprecating humor, move forward*"
+              },
+              feedback: {
+                'k2': "Perfect! Everyone makes mistakes! You handled it great!",
+                '3-5': "Excellent! You didn't let it ruin your day!",
+                '6-8': "Great recovery! Quick acknowledgment and forward momentum.",
+                '9-12': "Ideal! Self-deprecating humor + swift recovery demonstrates confidence."
+              },
+              proTip: {
+                'k2': "Pro Tip: Everyone falls sometimes! Just get up and smile!",
+                '3-5': "Pro Tip: Quick laugh + move on = everyone forgets fast!",
+                '6-8': "Pro Tip: Brief acknowledgment + humor + move forward = classic confident recovery pattern.",
+                '9-12': "Pro Tip: Confident people acknowledge mistakes without dwelling. Quick humor diffuses tension and models resilience."
+              },
+              isGood: true,
+              points: 10
+            },
+            {
+              text: {
+                'k2': "*Cry and run away*",
+                '3-5': "*Get really upset and hide*",
+                '6-8': "*Flee the situation in distress*",
+                '9-12': "*Catastrophize and exit abruptly*"
+              },
+              feedback: {
+                'k2': "It's okay to feel bad, but running away makes it seem bigger!",
+                '3-5': "It's normal to feel embarrassed, but don't let it control you!",
+                '6-8': "Fleeing amplifies the incident and reinforces shame.",
+                '9-12': "Catastrophic response to minor incidents reinforces anxiety and damages confidence."
+              },
+              proTip: {
+                'k2': "Pro Tip: Take a deep breath! Everyone makes mistakes and it's okay!",
+                '3-5': "Pro Tip: Feel the embarrassment, but don't run! Stay, breathe, and let it pass!",
+                '6-8': "Pro Tip: Embarrassment feels huge in the moment but fades fast. Staying present teaches your brain it's survivable.",
+                '9-12': "Pro Tip: Avoidance maintains shame. Tolerating discomfort in-situ builds resilience. Each time you stay, confidence grows."
+              },
+              isGood: false,
+              points: 0
+            },
+            {
+              text: {
+                'k2': "*Pretend it didn't happen and act weird*",
+                '3-5': "*Ignore it completely and act like nothing happened*",
+                '6-8': "*Deny or minimize without acknowledgment*",
+                '9-12': "*Complete avoidance, pretend it didn't occur*"
+              },
+              feedback: {
+                'k2': "Everyone saw it! A little laugh or 'I'm okay!' is better!",
+                '3-5': "Pretending makes it awkward! Just say 'oops!' and move on!",
+                '6-8': "Everyone saw it. Non-acknowledgment creates awkwardness.",
+                '9-12': "Denial when something is obvious creates disconnect and amplifies awkwardness."
+              },
+              proTip: {
+                'k2': "Pro Tip: It's okay to say 'I'm okay!' so people know you're fine!",
+                '3-5': "Pro Tip: Quick acknowledgment ('My bad!') works better than pretending!",
+                '6-8': "Pro Tip: Brief acknowledgment releases social tension. Denial maintains it.",
+                '9-12': "Pro Tip: Acknowledge obvious mishaps briefly, then redirect. Denial damages credibility and prolongs discomfort."
+              },
+              isGood: false,
+              points: 3
+            },
+            {
+              text: {
+                'k2': "*Blame someone else or something else*",
+                '3-5': "*Get angry and blame the teacher or classmates*",
+                '6-8': "*Externalize blame to protect ego*",
+                '9-12': "*Defensive blame-shifting to avoid responsibility*"
+              },
+              feedback: {
+                'k2': "That's not fair! It's okay to make mistakes - don't blame others!",
+                '3-5': "Blaming others makes it worse! Own your mistakes!",
+                '6-8': "Blame-shifting is transparent and damages credibility more than the original mistake.",
+                '9-12': "Defensive externalization signals fragile ego and lack of accountability."
+              },
+              proTip: {
+                'k2': "Pro Tip: Everyone makes mistakes! It's better to say 'Oops, my bad!' than to blame someone!",
+                '3-5': "Pro Tip: Taking responsibility = strong! Blaming others = weak! Own it and move on!",
+                '6-8': "Pro Tip: 'I messed up' followed by correction is infinitely stronger than blame-shifting.",
+                '9-12': "Pro Tip: Accountability signals confidence. Blame signals insecurity. Own mistakes swiftly and move forward."
+              },
+              isGood: false,
+              points: 0
+            }
+          ]
+        },
+        // SCENARIO 3: Accepting Compliments
+        {
+          id: 3,
+          image: 'https://images.unsplash.com/photo-1517898717222-37dd902c63e1?w=800&q=80',
+          imageAlt: 'Accepting compliments',
+          context: {
+            'k2': "Someone says 'I like your drawing! It's really good!'",
+            '3-5': "A classmate says 'You're really good at soccer!'",
+            '6-8': "Someone compliments your presentation: 'That was really well done.'",
+            '9-12': "Someone says 'You're really talented at this. That was impressive.'"
+          },
+          prompt: {
+            'k2': "What do you say?",
+            '3-5': "How do you respond?",
+            '6-8': "What's your reply?",
+            '9-12': "How do you accept the compliment?"
+          },
+          options: [
+            {
+              text: {
+                'k2': "Thank you! I worked hard on it!",
+                '3-5': "Thanks! I've been practicing a lot!",
+                '6-8': "Thank you! I really appreciate that.",
+                '9-12': "Thank you, that means a lot. I put a lot of effort into it."
+              },
+              feedback: {
+                'k2': "Perfect! You said thank you and were proud of your work!",
+                '3-5': "Excellent! You accepted the compliment graciously!",
+                '6-8': "Great! You acknowledged both the compliment and your effort.",
+                '9-12': "Ideal! You accepted graciously and validated your own effort."
+              },
+              proTip: {
+                'k2': "Pro Tip: When someone says something nice, say 'thank you!' and smile!",
+                '3-5': "Pro Tip: It's okay to be proud! Say 'thanks' and maybe mention how hard you worked!",
+                '6-8': "Pro Tip: The formula: 'Thank you' + brief acknowledgment of effort or context. This validates both of you.",
+                '9-12': "Pro Tip: Gracious acceptance = 'Thank you' + validation of your effort. Avoid deflection or over-humility."
+              },
+              isGood: true,
+              points: 10
+            },
+            {
+              text: {
+                'k2': "No it's not! It's bad!",
+                '3-5': "It's not that good. Anyone could do it.",
+                '6-8': "It wasn't that great, honestly.",
+                '9-12': "I really didn't do that well. There were so many mistakes."
+              },
+              feedback: {
+                'k2': "Don't say that! Your drawing IS good! Accept the nice words!",
+                '3-5': "You're being too hard on yourself! Accept the compliment!",
+                '6-8': "Deflecting compliments suggests low self-worth and dismisses the giver.",
+                '9-12': "Rejecting compliments signals insecurity and invalidates the complimenter's judgment."
+              },
+              proTip: {
+                'k2': "Pro Tip: When someone says something nice, believe them! Say 'thank you!'",
+                '3-5': "Pro Tip: Don't argue with compliments! Just say 'thanks' even if you feel shy!",
+                '6-8': "Pro Tip: Compliment deflection makes both parties uncomfortable. Simple 'thank you' is sufficient.",
+                '9-12': "Pro Tip: Rejecting compliments implies the giver has poor judgment. Honor their perspective with gracious acceptance."
+              },
+              isGood: false,
+              points: 0
+            },
+            {
+              text: {
+                'k2': "Yeah, I know I'm good!",
+                '3-5': "Yeah, I'm the best at this!",
+                '6-8': "I know, I'm pretty talented.",
+                '9-12': "Obviously. I'm naturally gifted at this."
+              },
+              feedback: {
+                'k2': "It's good to be proud, but that sounds a little too big!",
+                '3-5': "Being confident is good, but that sounds a bit too boastful!",
+                '6-8': "Confidence crossed into arrogance. This alienates others.",
+                '9-12': "Arrogant acceptance damages relationships and signals insecurity."
+              },
+              proTip: {
+                'k2': "Pro Tip: Say 'thank you' instead of 'I know!' Be proud but not too much!",
+                '3-5': "Pro Tip: Confidence is great! But stay humble: 'Thanks! I worked really hard!'",
+                '6-8': "Pro Tip: Balance confidence with humility: 'Thank you, I'm proud of the effort I put in.'",
+                '9-12': "Pro Tip: The line between confidence and arrogance: acknowledge effort/growth, not inherent superiority."
+              },
+              isGood: false,
+              points: 3
+            },
+            {
+              text: {
+                'k2': "*Say nothing and look away*",
+                '3-5': "*Shrug and change the subject*",
+                '6-8': "*Awkward silence, then topic change*",
+                '9-12': "*Uncomfortable deflection without acknowledgment*"
+              },
+              feedback: {
+                'k2': "They're trying to be nice! Say 'thank you!'",
+                '3-5': "Don't ignore compliments! At least say thanks!",
+                '6-8': "Ignoring compliments creates social awkwardness.",
+                '9-12': "Non-acknowledgment of compliments is socially uncomfortable for both parties."
+              },
+              proTip: {
+                'k2': "Pro Tip: Always say something when people are nice! 'Thank you!' is perfect!",
+                '3-5': "Pro Tip: Even if you feel shy, at least say 'thanks!' It's polite!",
+                '6-8': "Pro Tip: Compliment acknowledgment is a basic social contract. At minimum: 'Thank you.'",
+                '9-12': "Pro Tip: Silence in response to compliments creates discomfort. Always acknowledge, even if briefly."
+              },
+              isGood: false,
+              points: 2
+            }
+          ]
+        },
+        // SCENARIO 4: Standing Up for Yourself
+        {
+          id: 4,
+          image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=800&q=80',
+          imageAlt: 'Standing up for yourself',
+          context: {
+            'k2': "Someone cuts in line in front of you.",
+            '3-5': "A classmate takes your pencil without asking.",
+            '6-8': "Someone takes credit for your idea in a group project.",
+            '9-12': "Someone publicly dismisses your contribution in a meeting."
+          },
+          prompt: {
+            'k2': "What do you do?",
+            '3-5': "How do you handle this?",
+            '6-8': "What's your response?",
+            '9-12': "How do you address this?"
+          },
+          options: [
+            {
+              text: {
+                'k2': "Excuse me, I was here first.",
+                '3-5': "Hey, that's my pencil. Please give it back.",
+                '6-8': "Actually, that was my idea. I'd like credit for it.",
+                '9-12': "I appreciate your input, but I'd like to clarify my position on this."
+              },
+              feedback: {
+                'k2': "Great! You spoke up for yourself politely!",
+                '3-5': "Perfect! You were firm but polite!",
+                '6-8': "Excellent! You asserted yourself clearly and directly.",
+                '9-12': "Ideal! You stood your ground professionally and respectfully."
+              },
+              proTip: {
+                'k2': "Pro Tip: It's okay to tell people when something isn't fair! Use a calm voice!",
+                '3-5': "Pro Tip: You can be firm AND polite! Say what you need clearly but nicely!",
+                '6-8': "Pro Tip: Assertive formula: State the issue + your need/boundary. No aggression required.",
+                '9-12': "Pro Tip: Professional assertion: Acknowledge → Clarify → Stand firm. Maintain composure throughout."
+              },
+              isGood: true,
+              points: 10
+            },
+            {
+              text: {
+                'k2': "*Say nothing and let them cut*",
+                '3-5': "*Let them keep it and say nothing*",
+                '6-8': "*Stay silent and let them take credit*",
+                '9-12': "*Accept the dismissal without response*"
+              },
+              feedback: {
+                'k2': "That's not fair to you! It's okay to speak up!",
+                '3-5': "You deserve to have your things! Speak up next time!",
+                '6-8': "Silence reinforces the pattern and builds resentment.",
+                '9-12': "Non-assertion invites continued disrespect and damages self-respect."
+              },
+              proTip: {
+                'k2': "Pro Tip: You can use your words! It's okay to say 'That's not fair!'",
+                '3-5': "Pro Tip: Speaking up for yourself is important! Practice saying 'Please don't do that.'",
+                '6-8': "Pro Tip: Each time you don't assert yourself, the pattern strengthens. Start with small assertions.",
+                '9-12': "Pro Tip: Self-advocacy is a skill that requires practice. Start in low-stakes situations, build to high-stakes."
+              },
+              isGood: false,
+              points: 0
+            },
+            {
+              text: {
+                'k2': "HEY! You CAN'T do that! You're mean!",
+                '3-5': "Give it back NOW or I'll tell on you!",
+                '6-8': "That's MY idea! You're a thief!",
+                '9-12': "Are you seriously trying to steal my work? That's unacceptable!"
+              },
+              feedback: {
+                'k2': "Too loud and angry! Use a calm voice when you speak up!",
+                '3-5': "That's too aggressive! You can be firm without being mean!",
+                '6-8': "Aggressive assertion damages relationships and undermines your point.",
+                '9-12': "Hostile confrontation escalates conflict and damages professional reputation."
+              },
+              proTip: {
+                'k2': "Pro Tip: Use your normal voice, not your yelling voice! 'Please don't cut' works better!",
+                '3-5': "Pro Tip: Firm voice, calm words! 'That's mine, please give it back' is strong without being mean!",
+                '6-8': "Pro Tip: The difference between assertive and aggressive: tone, volume, and personal attacks. Keep it factual.",
+                '9-12': "Pro Tip: Assertive = clear boundary statement. Aggressive = attacks, accusations, hostility. The former works, the latter backfires."
+              },
+              isGood: false,
+              points: 2
+            },
+            {
+              text: {
+                'k2': "*Cry or get very upset*",
+                '3-5': "*Get really emotional and storm off*",
+                '6-8': "*Become visibly distressed and exit*",
+                '9-12': "*React with visible anger or tears*"
+              },
+              feedback: {
+                'k2': "It's okay to feel upset! But use your words first before getting too sad!",
+                '3-5': "Feelings are valid! But try words first: 'That's not okay.'",
+                '6-8': "Emotional reactivity undermines your message and position.",
+                '9-12': "Visible emotional dysregulation damages professional credibility."
+              },
+              proTip: {
+                'k2': "Pro Tip: Take a breath! Then use words: 'I don't like that. Please stop.'",
+                '3-5': "Pro Tip: If you feel like crying, that's okay! Take 3 deep breaths, then say what you need!",
+                '6-8': "Pro Tip: Feel the emotion, pause, then respond from a regulated place. Feeling → Breath → Response.",
+                '9-12': "Pro Tip: Emotional regulation before response: Notice emotion → Physiological intervention (breath) → Considered response."
+              },
+              isGood: false,
+              points: 3
+            }
+          ]
+        },
+        // SCENARIO 5: Trying New Things Socially
+        {
+          id: 5,
+          image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80',
+          imageAlt: 'Trying new things',
+          context: {
+            'k2': "You're invited to play a new game you've never played before.",
+            '3-5': "Someone invites you to join their club or activity.",
+            '6-8': "You're invited to a social event where you won't know many people.",
+            '9-12': "You have an opportunity to join a new group or try a new activity."
+          },
+          prompt: {
+            'k2': "What do you do?",
+            '3-5': "How do you respond?",
+            '6-8': "What's your decision?",
+            '9-12': "How do you handle this opportunity?"
+          },
+          options: [
+            {
+              text: {
+                'k2': "Okay! Can you show me how to play?",
+                '3-5': "Sure! That sounds fun! What do I need to know?",
+                '6-8': "I'd like to try! Can you fill me in on what to expect?",
+                '9-12': "I'm interested! Can you tell me more about it first?"
+              },
+              feedback: {
+                'k2': "Great! Trying new things helps you make friends!",
+                '3-5': "Perfect! You said yes AND asked good questions!",
+                '6-8': "Excellent! You're open to new experiences while gathering information.",
+                '9-12': "Ideal! You've expressed interest while managing risk through inquiry."
+              },
+              proTip: {
+                'k2': "Pro Tip: New things can be scary, but they're also fun! Just ask someone to help you!",
+                '3-5': "Pro Tip: Say yes to new things! You might discover something you love!",
+                '6-8': "Pro Tip: Growth happens outside comfort zones. Say yes more than you say no.",
+                '9-12': "Pro Tip: Calculated risk-taking builds confidence. Gather info, then commit. Each 'yes' expands your comfort zone."
+              },
+              isGood: true,
+              points: 10
+            },
+            {
+              text: {
+                'k2': "No, I don't want to.",
+                '3-5': "No thanks, I don't do new things.",
+                '6-8': "I'm not really into trying new stuff.",
+                '9-12': "That's not really my thing. I'll pass."
+              },
+              feedback: {
+                'k2': "That's okay sometimes, but you might miss out on something fun!",
+                '3-5': "It's okay to say no, but try not to always say no to new things!",
+                '6-8': "Habitual refusal limits growth and opportunity.",
+                '9-12': "Consistent risk avoidance maintains anxiety and restricts life experience."
+              },
+              proTip: {
+                'k2': "Pro Tip: It's okay to feel nervous about new things! But try saying yes sometimes - it might be fun!",
+                '3-5': "Pro Tip: Challenge yourself! Try to say 'yes' to at least one new thing each week!",
+                '6-8': "Pro Tip: If you find yourself defaulting to 'no,' ask: 'What's the worst that could happen?' Often it's manageable.",
+                '9-12': "Pro Tip: Anxiety says 'don't do it.' Growth says 'do it scared.' Track which advice serves you better long-term."
+              },
+              isGood: false,
+              points: 0
+            },
+            {
+              text: {
+                'k2': "I don't know how! I'll look silly!",
+                '3-5': "What if I'm bad at it? Everyone will laugh!",
+                '6-8': "I'll probably embarrass myself. I shouldn't go.",
+                '9-12': "I don't know anyone there and I'll look awkward. Better not."
+              },
+              feedback: {
+                'k2': "Everyone is learning! Nobody will laugh at you for trying!",
+                '3-5': "Everyone starts as a beginner! People respect those who try!",
+                '6-8': "Catastrophizing prevents growth. Most fears don't materialize.",
+                '9-12': "Anticipatory anxiety is usually worse than actual experience. Test your predictions."
+              },
+              proTip: {
+                'k2': "Pro Tip: It's okay to not know how! Everyone learns! Just ask for help!",
+                '3-5': "Pro Tip: Being bad at something at first is how you get good at it! Everyone starts somewhere!",
+                '6-8': "Pro Tip: Embarrassment predictions rarely come true. And when they do, recovery is faster than you think.",
+                '9-12': "Pro Tip: Cognitive distortion check: 'What evidence supports this fear?' Often there's none. Try it anyway."
+              },
+              isGood: false,
+              points: 2
+            },
+            {
+              text: {
+                'k2': "YES! *immediately runs over without asking questions*",
+                '3-5': "SURE! *jumps in without any information*",
+                '6-8': "Absolutely! *commits immediately without details*",
+                '9-12': "I'm in! *full commitment without inquiry*"
+              },
+              feedback: {
+                'k2': "Great energy! But it's okay to ask questions first!",
+                '3-5': "Enthusiasm is great! But ask a few questions so you know what to expect!",
+                '6-8': "Eagerness is positive, but informed decisions are better than impulsive ones.",
+                '9-12': "Blind enthusiasm can lead to poor decisions. Balance openness with prudent inquiry."
+              },
+              proTip: {
+                'k2': "Pro Tip: It's good to be excited! But first ask: 'What do we do?' so you know what's happening!",
+                '3-5': "Pro Tip: Say yes to new things, but ask a question or two first! 'How does it work?' or 'What should I bring?'",
+                '6-8': "Pro Tip: Openness + prudence = wise decisions. Express interest, gather info, then commit.",
+                '9-12': "Pro Tip: Balance spontaneity with due diligence. Quick 'yes' to experiences, but ask clarifying questions first."
+              },
+              isGood: true,
+              points: 8
+            }
+          ]
+        },
+        // SCENARIO 6: Recovery from Social Mistakes
+        {
+          id: 6,
+          image: 'https://images.unsplash.com/photo-1551836022-deb4988cc6c0?w=800&q=80',
+          imageAlt: 'Recovery from mistakes',
+          context: {
+            'k2': "You accidentally said something that hurt a friend's feelings.",
+            '3-5': "You forgot someone's name right after they told you.",
+            '6-8': "You made an insensitive comment without thinking.",
+            '9-12': "You said something awkward or inappropriate in a group."
+          },
+          prompt: {
+            'k2': "What should you do?",
+            '3-5': "How do you fix this?",
+            '6-8': "What's your response?",
+            '9-12': "How do you recover?"
+          },
+          options: [
+            {
+              text: {
+                'k2': "I'm sorry! I didn't mean to hurt your feelings.",
+                '3-5': "I'm sorry, can you remind me of your name?",
+                '6-8': "I apologize - that was insensitive. I should have thought before speaking.",
+                '9-12': "That came out wrong. I apologize - let me rephrase that more thoughtfully."
+              },
+              feedback: {
+                'k2': "Perfect! You said sorry and were honest!",
+                '3-5': "Excellent! Quick apology and asking for help!",
+                '6-8': "Great! You acknowledged the mistake and took responsibility.",
+                '9-12': "Ideal! Swift acknowledgment, genuine apology, and correction."
+              },
+              proTip: {
+                'k2': "Pro Tip: When you hurt someone, say 'I'm sorry' right away!",
+                '3-5': "Pro Tip: Everyone makes mistakes! Say sorry quickly, then fix it!",
+                '6-8': "Pro Tip: The formula: Acknowledge + Apologize + Correct. Do it swiftly and sincerely.",
+                '9-12': "Pro Tip: Rapid recovery: immediate acknowledgment → genuine apology → behavioral correction. Speed matters."
+              },
+              isGood: true,
+              points: 10
+            },
+            {
+              text: {
+                'k2': "*Pretend it didn't happen*",
+                '3-5': "*Act like nothing happened*",
+                '6-8': "*Continue without acknowledgment*",
+                '9-12': "*Ignore the misstep and proceed*"
+              },
+              feedback: {
+                'k2': "They're still hurt! You need to say sorry!",
+                '3-5': "Ignoring mistakes doesn't make them go away! Apologize!",
+                '6-8': "Non-acknowledgment amplifies the offense and damages trust.",
+                '9-12': "Avoidance signals either obliviousness or lack of care. Both damage relationships."
+              },
+              proTip: {
+                'k2': "Pro Tip: Always say sorry when you hurt someone! It helps them feel better!",
+                '3-5': "Pro Tip: Pretending doesn't work! Quick apology fixes things much better!",
+                '6-8': "Pro Tip: Mistakes acknowledged are mistakes minimized. Mistakes ignored are mistakes amplified.",
+                '9-12': "Pro Tip: The longer you wait to acknowledge, the bigger it becomes. Immediate acknowledgment limits damage."
+              },
+              isGood: false,
+              points: 0
+            },
+            {
+              text: {
+                'k2': "You're too sensitive! I was just kidding!",
+                '3-5': "It's not that big of a deal! You're overreacting!",
+                '6-8': "I was just joking! Don't be so sensitive!",
+                '9-12': "People are too easily offended these days. That's on you."
+              },
+              feedback: {
+                'k2': "That makes it worse! Just say sorry!",
+                '3-5': "Blaming them makes it worse! Take responsibility!",
+                '6-8': "Defensive blame-shifting compounds the original offense.",
+                '9-12': "Invalidating their reaction destroys trust and prevents resolution."
+              },
+              proTip: {
+                'k2': "Pro Tip: NEVER say 'you're too sensitive!' Just say 'I'm sorry I hurt you!'",
+                '3-5': "Pro Tip: Don't blame them for being hurt! Say 'I'm sorry' and mean it!",
+                '6-8': "Pro Tip: 'I didn't mean to hurt you' ≠ 'You shouldn't be hurt.' Intention doesn't negate impact.",
+                '9-12': "Pro Tip: Impact > Intent. Your intentions don't invalidate their experience. Apologize for impact, regardless of intent."
+              },
+              isGood: false,
+              points: 0
+            },
+            {
+              text: {
+                'k2': "I'm so sorry! I'm the worst! I always mess up!",
+                '3-5': "I'm so stupid! I can't believe I did that! I'm terrible!",
+                '6-8': "I'm such an idiot. I always say the wrong thing. I'm hopeless.",
+                '9-12': "I'm the worst person. I can't do anything right. I should just stop talking."
+              },
+              feedback: {
+                'k2': "You're not the worst! Just say 'I'm sorry' - that's enough!",
+                '3-5': "Don't be so hard on yourself! Simple 'I'm sorry' is better!",
+                '6-8': "Over-apologizing makes the other person manage YOUR feelings. Keep it simple.",
+                '9-12': "Excessive self-flagellation burdens others with consoling you. Brief, genuine apology is sufficient."
+              },
+              proTip: {
+                'k2': "Pro Tip: You don't need to feel really bad! Just say 'sorry' and be more careful next time!",
+                '3-5': "Pro Tip: Simple apology is best! 'I'm sorry, I'll try not to do that again.' That's it!",
+                '6-8': "Pro Tip: Over-apologizing shifts focus to your distress, requiring them to comfort you. Keep it simple and sincere.",
+                '9-12': "Pro Tip: Proportional response: minor mistake = brief apology. Don't create emotional labor for the other person."
+              },
+              isGood: false,
+              points: 4
+            }
+          ]
+        }
+      ]
     }
   };
   
