@@ -698,7 +698,7 @@ function LessonsScreen({ userData, onNavigate, darkMode }) {
         show={showCelebration} 
         onComplete={() => setShowCelebration(false)} 
       />
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-4">
@@ -1063,7 +1063,7 @@ function LessonsScreen({ userData, onNavigate, darkMode }) {
         </section>
 
         {/* Lessons Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mb-8">
           {lessons.map((lesson) => {
             const Icon = lesson.icon;
             const completed = isCompleted(lesson.id);
@@ -1073,10 +1073,10 @@ function LessonsScreen({ userData, onNavigate, darkMode }) {
             return (
               <div
                 key={lesson.id}
-                className={`p-4 sm:p-6 rounded-2xl border transition-all hover:scale-105 cursor-pointer relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 ${
+                className={`backdrop-blur-xl border rounded-3xl p-6 transition-all hover:shadow-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 ${
                   darkMode 
-                    ? 'bg-white/5 border-white/10 hover:border-blue-500/50 hover:bg-white/10' 
-                    : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-lg'
+                    ? 'bg-white/8 border-white/20 hover:border-blue-500/50 hover:bg-white/10' 
+                    : 'bg-white border-gray-200 shadow-sm hover:border-blue-300 hover:shadow-lg'
                 } ${lessonStatus.status === 'completed' ? 'ring-2 ring-emerald-500/50' : ''} ${
                   lessonStatus.status === 'in_progress' ? 'ring-1 ring-blue-500/30' : ''
                 }`}
@@ -1091,51 +1091,14 @@ function LessonsScreen({ userData, onNavigate, darkMode }) {
                 role="button"
                 aria-label={`${lesson.title} lesson - ${lessonStatus.statusText}. Click to ${(lessonStatus.buttonText || '').toLowerCase()}.`}
               >
-                {/* Status Badge */}
-                <div className="absolute top-4 right-4 flex flex-col gap-2">
-                  <StatusBadge 
-                    status={lessonStatus.status} 
-                    size="sm" 
-                    animated={true}
-                  />
-                  
-                  {/* Restart Button */}
-                  {(lessonStatus.status === 'in_progress' || lessonStatus.status === 'completed') && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRestartLesson(lesson);
-                      }}
-                      className={`p-1 rounded-full transition-all hover:scale-110 ${
-                        darkMode 
-                          ? 'text-gray-400 hover:text-red-400 hover:bg-red-500/20' 
-                          : 'text-gray-500 hover:text-red-500 hover:bg-red-50'
-                      }`}
-                      title="Restart Lesson"
-                      aria-label="Restart lesson"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Progress Circle */}
-                <div className="absolute top-4 left-4">
-                  <ProgressCircle 
-                    progress={lessonStatus.progressPercentage}
-                    status={lessonStatus.status}
-                    size="sm"
-                    animated={true}
-                  />
-                </div>
-
-                <div className="flex items-start justify-between mb-4 pt-8">
-                  <div className="flex items-center gap-3">
+                {/* Header Section */}
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3 flex-1">
                     <div className={`p-3 rounded-xl ${darkMode ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
                       <Icon className="w-6 h-6 text-blue-400" />
                     </div>
-                    <div>
-                      <h3 className="text-xl font-bold mb-1">{lesson.title}</h3>
+                    <div className="flex-1">
+                      <h3 className={`text-xl font-bold mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{lesson.title}</h3>
                       <div className="flex items-center gap-2">
                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${getDifficultyColor(lesson.difficulty)}`}>
                           {lesson.difficulty}
@@ -1146,18 +1109,40 @@ function LessonsScreen({ userData, onNavigate, darkMode }) {
                       </div>
                     </div>
                   </div>
-                  {lessonStatus.status === 'completed' && (
-                    <div className="flex items-center gap-1 text-emerald-400">
-                      <Star className="w-5 h-5 fill-current" />
-                      <span className="text-sm font-bold">+{lesson.points}</span>
-                    </div>
-                  )}
+                  
+                  {/* Status Badge and Restart Button */}
+                  <div className="flex flex-col gap-2 items-end">
+                    <StatusBadge 
+                      status={lessonStatus.status} 
+                      size="sm" 
+                      animated={true}
+                    />
+                    {(lessonStatus.status === 'in_progress' || lessonStatus.status === 'completed') && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRestartLesson(lesson);
+                        }}
+                        className={`p-1 rounded-full transition-all hover:scale-110 ${
+                          darkMode 
+                            ? 'text-gray-400 hover:text-red-400 hover:bg-red-500/20' 
+                            : 'text-gray-500 hover:text-red-500 hover:bg-red-50'
+                        }`}
+                        title="Restart Lesson"
+                        aria-label="Restart lesson"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <p className={`text-sm mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                {/* Description Section */}
+                <p className={`text-sm mb-4 leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                   {lesson.description}
                 </p>
 
+                {/* Topics Section */}
                 <div className="mb-4">
                   <p className={`text-xs font-bold mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                     TOPICS COVERED:
@@ -1174,8 +1159,16 @@ function LessonsScreen({ userData, onNavigate, darkMode }) {
                   </div>
                 </div>
 
-                {/* Progress Bar */}
+                {/* Progress Section */}
                 <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Progress
+                    </span>
+                    <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {lessonStatus.progressPercentage}%
+                    </span>
+                  </div>
                   <ProgressBar 
                     progress={lessonStatus.progressPercentage}
                     status={lessonStatus.status}
@@ -1187,6 +1180,7 @@ function LessonsScreen({ userData, onNavigate, darkMode }) {
                   />
                 </div>
 
+                {/* Footer Section */}
                 <div className="flex items-center justify-between">
                   <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                     {lessonStatus.status === 'completed' ? 'Completed' : `${lesson.points} points`}
