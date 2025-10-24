@@ -207,12 +207,20 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
       setSelectedOption(null);
       setShowFeedback(false);
     } else {
+      // Session complete - navigate to progress screen
       setSessionComplete(true);
       playSound('complete');
       const userData = getUserData();
       userData.totalSessions += 1;
       userData.confidenceScore = Math.min(100, userData.confidenceScore + 2);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+      
+      // Navigate to progress screen after a short delay to show completion
+      setTimeout(() => {
+        if (onNavigate) {
+          onNavigate('progress');
+        }
+      }, 1500);
     }
   };
 
