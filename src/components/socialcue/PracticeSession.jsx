@@ -23,9 +23,11 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
   const [sessionResults, setSessionResults] = useState(null);
   const [showSessionResults, setShowSessionResults] = useState(false);
   const [isCompletingSession, setIsCompletingSession] = useState(false);
+  const [lessonState, setLessonState] = useState('loading'); // 'loading', 'ready', 'error'
+  const [aiGeneratedScenario, setAiGeneratedScenario] = useState(null);
 
   const gradeRange = getGradeRange(gradeLevel);
-  const scenario = scenarios[sessionId] || scenarios[1];
+  const scenario = aiGeneratedScenario || scenarios[sessionId] || scenarios[1];
   const situation = scenario.situations[currentSituation];
 
   // Shuffle function to randomize answer positions
@@ -52,6 +54,73 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
       setOriginalCorrectIndex(correctIndex);
     }
   }, [currentSituation, situation]);
+
+  // AI Scenario Generation
+  useEffect(() => {
+    const generateScenarios = async () => {
+      try {
+        console.log('🤖 Generating AI scenarios for:', sessionId);
+        console.log('🔍 SESSION ID:', sessionId);
+        console.log('🔍 GRADE LEVEL:', gradeLevel);
+        setLessonState('loading');
+
+        // Call your backend API to generate scenarios
+        const response = await fetch('http://localhost:3001/api/generate-lesson', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            topic: sessionId, // or get topic name from props
+            gradeLevel: gradeLevel || '5',
+            numScenarios: 5
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to generate scenarios');
+        }
+
+        const data = await response.json();
+        console.log('✅ AI scenarios generated:', data);
+        
+        // Transform the API response to match our scenario format
+        const transformedScenario = {
+          id: sessionId,
+          title: data.lesson.topic || sessionId,
+          situations: data.lesson.practiceScenarios.map((scenario, index) => ({
+            id: scenario.id || index + 1,
+            context: scenario.situation,
+            prompt: scenario.question,
+            options: scenario.options.map(option => ({
+              text: option.text,
+              isGood: option.quality === 'excellent',
+              points: option.quality === 'excellent' ? 10 : option.quality === 'good' ? 5 : 0,
+              feedback: option.feedback,
+              tip: option.tip
+            }))
+          })),
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          aiGenerated: true
+        };
+        
+        setAiGeneratedScenario(transformedScenario);
+        console.log('🔍 SCENARIO SOURCE:', 'AI Generated');
+        setLessonState('ready');
+      } catch (error) {
+        console.error('❌ Error generating scenarios:', error);
+        console.log('🔍 SCENARIO SOURCE:', 'Hardcoded (fallback)');
+        
+        // Fallback to demo scenarios if AI fails
+        setAiGeneratedScenario(null);
+        setLessonState('ready');
+      }
+    };
+
+    if (sessionId) {
+      generateScenarios();
+    }
+  }, [sessionId, gradeLevel]);
 
   // AI Evaluation function
   const evaluateResponse = async (scenario, userResponse, learnerContext) => {
@@ -460,6 +529,41 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
   const scenarioTitle = getContent(scenario.title);
   const situationContext = getContent(situation.context);
   const situationPrompt = getContent(situation.prompt);
+
+  // Loading state while AI generates scenarios
+  if (lessonState === 'loading') {
+    return (
+      <div className={`min-h-screen ${darkMode ? 'bg-black text-white' : 'bg-gray-50 text-gray-900'}`}>
+        <div className="fixed inset-0 opacity-20" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}></div>
+        
+        <div className="relative z-10 flex items-center justify-center min-h-screen p-6 pb-24">
+          <div className="max-w-2xl w-full">
+            <div className={`backdrop-blur-xl border rounded-3xl p-8 text-center ${
+              darkMode ? 'bg-white/8 border-white/20' : 'bg-white border-gray-200 shadow-lg'
+            }`}>
+              <div className="mb-6">
+                <div className="text-7xl mb-4">🤖</div>
+                <h1 className={`text-4xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Generating AI Scenarios...
+                </h1>
+                <p className={`text-xl ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Creating personalized practice scenarios for you
+                </p>
+              </div>
+              
+              <div className="flex justify-center mb-6">
+                <LoadingSpinner size="large" />
+              </div>
+              
+              <p className={`text-sm ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                This may take a few moments...
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (sessionComplete && !showSessionResults) {
     return (
