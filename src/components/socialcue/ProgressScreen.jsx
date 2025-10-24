@@ -895,6 +895,7 @@ function ProgressScreen({ userData, darkMode }) {
       */}
 
       {/* Error Message - Only show for real errors, not "Learner profile not found" */}
+      {/* COMMENTED OUT: Demo data warning
       {error && !error.includes('Learner profile not found') && (
         <div className={`backdrop-blur-xl border rounded-2xl p-6 mb-6 ${
           darkMode ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200'
@@ -912,6 +913,7 @@ function ProgressScreen({ userData, darkMode }) {
           </div>
         </div>
       )}
+      */}
 
       {/* Original Stats Section */}
       <div className={`backdrop-blur-xl border rounded-2xl p-6 mb-6 ${
