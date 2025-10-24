@@ -17,6 +17,22 @@ function ProgressScreen({ userData, darkMode }) {
   const [insights, setInsights] = useState(null);
   const [insightsLoading, setInsightsLoading] = useState(true);
   const [insightsError, setInsightsError] = useState(null);
+  const [activeChallenges, setActiveChallenges] = useState([
+    {
+      id: 1,
+      title: "Start a conversation at lunch",
+      description: "Try introducing yourself to someone new at lunch. Ask them about their day or what they're interested in.",
+      difficulty: "Beginner",
+      topic: "Starting Conversations"
+    },
+    {
+      id: 2,
+      title: "Make eye contact during a conversation",
+      description: "When talking to someone today, practice maintaining comfortable eye contact for 3-5 seconds at a time.",
+      difficulty: "Intermediate",
+      topic: "Body Language"
+    }
+  ]);
 
   // Fetch mastery dashboard data
   // COMMENT OUT API CALLS FOR NOW - Backend not ready
@@ -533,6 +549,22 @@ function ProgressScreen({ userData, darkMode }) {
     }
   };
 
+  const handleCompleteChallenge = (challengeId) => {
+    // Mark challenge as complete and remove from active list
+    setActiveChallenges(prev => prev.filter(c => c.id !== challengeId));
+    
+    // Save to Firebase
+    // TODO: Add Firebase save logic
+    
+    // Show success message
+    alert('Great job! Challenge completed! 🎉');
+  };
+
+  const handleSkipChallenge = (challengeId) => {
+    // Remove challenge from active list
+    setActiveChallenges(prev => prev.filter(c => c.id !== challengeId));
+  };
+
   if (loading) {
     return (
       <div className="pb-24 px-6 py-8">
@@ -695,6 +727,65 @@ function ProgressScreen({ userData, darkMode }) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Active Challenges Section */}
+      {activeChallenges && activeChallenges.length > 0 && (
+        <div className={`backdrop-blur-xl border rounded-2xl p-6 mb-6 ${
+          darkMode ? 'bg-white/8 border-white/20' : 'bg-white border-gray-200'
+        }`}>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+              🎯 Active Challenges
+            </h2>
+            <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              {activeChallenges.length} active
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {activeChallenges.map((challenge, index) => (
+              <div 
+                key={index}
+                className={`p-4 rounded-xl border ${
+                  darkMode ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200'
+                }`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    {challenge.title}
+                  </h3>
+                  <span className={`text-xs px-2 py-1 rounded ${
+                    darkMode ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    {challenge.difficulty}
+                  </span>
+                </div>
+                
+                <p className={`text-sm mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  {challenge.description}
+                </p>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleCompleteChallenge(challenge.id)}
+                    className="flex-1 bg-gradient-to-r from-emerald-500 to-blue-500 text-white text-sm font-bold py-2 px-4 rounded-lg hover:shadow-lg transition-all"
+                  >
+                    Mark Complete
+                  </button>
+                  <button
+                    onClick={() => handleSkipChallenge(challenge.id)}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold ${
+                      darkMode ? 'bg-white/10 text-gray-400 hover:bg-white/20' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    Skip
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
