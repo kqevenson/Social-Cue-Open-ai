@@ -367,7 +367,7 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     stopSpeaking();
     playSound('click');
     
