@@ -35,8 +35,6 @@ function ProgressScreen({ userData, darkMode }) {
   ]);
 
   // Fetch mastery dashboard data
-  // COMMENT OUT API CALLS FOR NOW - Backend not ready
-  /*
   useEffect(() => {
     const fetchMasteryData = async () => {
       try {
@@ -163,8 +161,7 @@ function ProgressScreen({ userData, darkMode }) {
         console.error('❌ Error fetching mastery dashboard:', err);
         setError(err.message);
         
-        // COMMENTED OUT: Fallback data with fake 2024 dates
-        /*
+        // Fallback data for new users
         setMasteryData({
           summary: {
             totalTopics: 8,
@@ -381,8 +378,6 @@ function ProgressScreen({ userData, darkMode }) {
     setInsightsLoading(false);
   }, []);
 
-  // COMMENT OUT API CALLS FOR NOW - Backend not ready
-  /*
   useEffect(() => {
     const fetchInsights = async () => {
       try {
@@ -455,7 +450,6 @@ function ProgressScreen({ userData, darkMode }) {
 
     fetchInsights();
   }, []);
-  */
 
   // Helper functions
   const getDifficultyLabel = (level) => {
@@ -471,14 +465,15 @@ function ProgressScreen({ userData, darkMode }) {
 
   const getDifficultyColor = (level) => {
     const colors = {
-      1: 'text-gray-400',
-      2: 'text-blue-400',
-      3: 'text-green-400',
-      4: 'text-purple-400',
-      5: 'text-yellow-400'
+      1: darkMode ? 'text-green-400' : 'text-green-600',
+      2: darkMode ? 'text-blue-400' : 'text-blue-600', 
+      3: darkMode ? 'text-yellow-400' : 'text-yellow-600',
+      4: darkMode ? 'text-orange-400' : 'text-orange-600',
+      5: darkMode ? 'text-red-400' : 'text-red-600'
     };
-    return colors[level] || 'text-gray-400';
+    return colors[level] || darkMode ? 'text-gray-400' : 'text-gray-600';
   };
+
 
   const formatTimeSpent = (minutes) => {
     const hours = Math.floor(minutes / 60);
@@ -885,7 +880,11 @@ function ProgressScreen({ userData, darkMode }) {
                       {topic.topicName}
                     </h3>
                     <div className="flex items-center gap-2">
-                      <DifficultyBadge level={topic.difficultyLevel} darkMode={darkMode} size="sm" />
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                        darkMode ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'
+                      }`}>
+                        Level {topic.difficultyLevel}: {getDifficultyLabel(topic.difficultyLevel)}
+                      </span>
                       {topic.isCompleted && (
                         <span className="text-xs font-bold px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-400">
                           COMPLETED
@@ -964,6 +963,9 @@ function ProgressScreen({ userData, darkMode }) {
                   </div>
                   <div className={`text-lg font-bold ${getDifficultyColor(topic.difficultyLevel)}`}>
                     {topic.difficultyLevel}/5
+                  </div>
+                  <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    {getDifficultyLabel(topic.difficultyLevel)}
                   </div>
                 </div>
               </div>
