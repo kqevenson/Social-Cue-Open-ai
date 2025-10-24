@@ -62,6 +62,14 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
         console.log('🤖 Generating AI scenarios for:', sessionId);
         console.log('🔍 SESSION ID:', sessionId);
         console.log('🔍 GRADE LEVEL:', gradeLevel);
+        
+        // Don't generate if no sessionId
+        if (!sessionId) {
+          console.log('⚠️ No sessionId provided, using fallback scenarios');
+          setLessonState('ready');
+          return;
+        }
+        
         setLessonState('loading');
 
         // Call your backend API to generate scenarios
@@ -119,6 +127,9 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
 
     if (sessionId) {
       generateScenarios();
+    } else {
+      console.log('⚠️ No sessionId, skipping AI generation');
+      setLessonState('ready');
     }
   }, [sessionId, gradeLevel]);
 
