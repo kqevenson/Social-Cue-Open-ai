@@ -8,7 +8,7 @@ import LessonExplanation from './lessons/LessonExplanation';
 import LessonSummary from './lessons/LessonSummary';
 import PracticeSession from './PracticeSession';
 import { ErrorBoundaryFallback } from './animations/ErrorBoundaryFallback';
-import { ToastNotification } from './animations/ToastNotification';
+import { ToastNotification } from './animations';
 import { LessonSkeleton } from './animations/SkeletonScreens';
 
 function AILessonSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEffects, autoReadText }) {
