@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Home, Target, TrendingUp, Settings, BookOpen, User, BarChart3 } from 'lucide-react';
 import { getUserData, saveUserData } from './socialcue/utils/storage';
 import { lessonApiService } from '../services/lessonApi';
-import { ToastProvider } from './socialcue/animations';
+import { ToastProvider, ErrorBoundary } from './socialcue/animations';
 import HomeScreen from './socialcue/HomeScreen';
 import PracticeScreen from './socialcue/PracticeScreen';
 import ProgressScreen from './socialcue/ProgressScreen';
@@ -216,34 +216,38 @@ function SocialCueApp({ onLogout }) {
         
         {/* Lessons - only for learners */}
         {currentScreen === 'lessons' && userData?.role !== 'parent' && (
-          <LessonsScreen 
-            userData={userData} 
-            onNavigate={handleNavigate} 
-            darkMode={darkMode} 
-          />
+          <ErrorBoundary darkMode={darkMode} onNavigate={handleNavigate}>
+            <LessonsScreen 
+              userData={userData} 
+              onNavigate={handleNavigate} 
+              darkMode={darkMode} 
+            />
+          </ErrorBoundary>
         )}
         
         {/* Practice Session - only for learners */}
         {currentScreen === 'practice' && sessionId && userData?.role !== 'parent' && (
-          <PracticeSession 
-            sessionId={sessionId} 
-            onNavigate={handleNavigate}
-            onComplete={(data) => {
-              console.log('Session completed!', data);
-              handleNavigate('progress');
-              setSessionId(null);
-            }}
-            onExit={() => {
-              console.log('Session exited');
-              handleNavigate('home');
-              setSessionId(null);
-            }}
-            darkMode={darkMode} 
-            gradeLevel={userData.grade || "5"} 
-            soundEffects={soundEffects}
-            autoReadText={autoReadText}
-            topicName={userData.topicName}
-          />
+          <ErrorBoundary darkMode={darkMode} onNavigate={handleNavigate}>
+            <PracticeSession 
+              sessionId={sessionId} 
+              onNavigate={handleNavigate}
+              onComplete={(data) => {
+                console.log('Session completed!', data);
+                handleNavigate('progress');
+                setSessionId(null);
+              }}
+              onExit={() => {
+                console.log('Session exited');
+                handleNavigate('home');
+                setSessionId(null);
+              }}
+              darkMode={darkMode} 
+              gradeLevel={userData.grade || "5"} 
+              soundEffects={soundEffects}
+              autoReadText={autoReadText}
+              topicName={userData.topicName}
+            />
+          </ErrorBoundary>
         )}
         
         {/* Practice Home - only for learners */}
@@ -270,10 +274,13 @@ function SocialCueApp({ onLogout }) {
               darkMode={darkMode}
             />
           ) : (
-            <ProgressScreen 
-              userData={userData} 
-              darkMode={darkMode} 
-            />
+            <ErrorBoundary darkMode={darkMode} onNavigate={handleNavigate}>
+              <ProgressScreen 
+                userData={userData} 
+                darkMode={darkMode} 
+                onNavigate={handleNavigate}
+              />
+            </ErrorBoundary>
           )
         )}
         

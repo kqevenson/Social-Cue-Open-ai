@@ -14,3 +14,4 @@ export {
 export { default as LoadingSpinner } from './LoadingSpinner';
 export { default as ToastNotification } from './ToastNotification';
 export { ToastProvider, useToast } from './ToastProvider';
+export { default as ErrorBoundary } from './ErrorBoundary';

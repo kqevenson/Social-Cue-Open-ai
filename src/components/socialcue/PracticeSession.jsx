@@ -157,7 +157,7 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
         // Fallback to demo scenarios if AI fails
         setAiGeneratedScenario(null);
         setLessonState('ready');
-        showError('Having trouble creating scenarios. Using practice scenarios instead.');
+        showError('Oops! Having trouble creating your practice session. Let\'s try that again!');
       }
     };
 
@@ -169,8 +169,8 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
     }
   }, [sessionId, gradeLevel]);
 
-  // AI Evaluation function
-  const evaluateResponse = async (scenario, userResponse, learnerContext) => {
+  // AI Evaluation function with retry logic
+  const evaluateResponse = async (scenario, userResponse, learnerContext, retryCount = 0) => {
     try {
       setIsEvaluating(true);
       
@@ -205,15 +205,25 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
       return evaluation;
     } catch (error) {
       console.error('Error evaluating response:', error);
-      showError('Having trouble analyzing your response. Using basic feedback.');
+      
+      // Retry once if this is the first attempt
+      if (retryCount === 0) {
+        console.log('🔄 Retrying AI evaluation in 2 seconds...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return evaluateResponse(scenario, userResponse, learnerContext, 1);
+      }
+      
+      // If retry also fails, show friendly message and use fallback
+      showError('Still learning! Here\'s some quick feedback for now.');
+      
       // Return fallback evaluation if API fails
       return {
         score: 0.5,
-        feedback: "Unable to evaluate response at this time.",
+        feedback: "Great effort! Keep practicing to improve your social skills.",
         comprehensionLevel: "basic",
-        strengths: [],
-        areasForImprovement: [],
-        personalizedFeedback: "Keep practicing! Every attempt helps you learn."
+        strengths: ["You're trying your best!"],
+        areasForImprovement: ["Keep practicing different scenarios"],
+        personalizedFeedback: "Every attempt helps you learn. You're doing great!"
       };
     } finally {
       setIsEvaluating(false);
