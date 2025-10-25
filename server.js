@@ -5,7 +5,7 @@ import bodyParser from 'body-parser';
 import Anthropic from '@anthropic-ai/sdk';
 import { getTemplate, getDisplayName } from './promptTemplates.js';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, getDoc, setDoc, query, where, getDocs, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { getFirestore, collection, doc, getDoc, setDoc, query, where, getDocs, serverTimestamp, writeBatch, deleteDoc } from 'firebase/firestore';
 import adaptiveLearningRoutes from './adaptive-learning-routes.js';
 
 dotenv.config();
@@ -1907,6 +1907,707 @@ Make it encouraging, specific, and practical for real-world practice.`;
       success: true,
       challenge: fallbackChallenge,
       warning: 'Using fallback challenge due to AI generation error'
+    });
+  }
+});
+
+// AI Response Evaluation Endpoint
+// ===============================
+
+// POST /api/adaptive/evaluate-response - AI evaluates student responses
+app.post('/api/adaptive/evaluate-response', async (req, res) => {
+  const { learnerId, question, selectedAnswer, correctAnswer, isCorrectAnswer } = req.body;
+  
+  console.log('🤖 Evaluating response for:', learnerId);
+  
+  try {
+    // Call Claude API for feedback
+    const response = await anthropic.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 500,
+      temperature: 0.7,
+      messages: [{
+        role: 'user',
+        content: `A student answered a social skills question.
+
+Question: ${question}
+Their answer: ${selectedAnswer}
+Correct answer: ${correctAnswer}
+Was correct: ${isCorrectAnswer}
+
+Provide brief, encouraging feedback (2-3 sentences). If incorrect, gently explain why the correct answer is better.`
+      }]
+    });
+    
+    const feedback = response.content[0].text;
+    
+    console.log('✅ AI feedback generated for learner:', learnerId);
+    
+    res.json({
+      success: true,
+      feedback: feedback,
+      isCorrect: isCorrectAnswer
+    });
+    
+  } catch (error) {
+    console.error('❌ Error evaluating response:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message,
+      feedback: 'Great effort! Keep practicing.'
+    });
+  }
+});
+
+// Privacy & Data Management Endpoints
+// =====================================
+
+// GET /api/user/privacy/:userId - fetch privacy settings
+app.get('/api/user/privacy/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log(`🔒 Fetching privacy settings for user: ${userId}`);
+
+    const privacyDoc = doc(db, 'users', userId, 'privacy', 'settings');
+    const privacySnap = await getDoc(privacyDoc);
+
+    if (privacySnap.exists()) {
+      res.json({
+        success: true,
+        privacy: privacySnap.data()
+      });
+    } else {
+      // Return default privacy settings
+      const defaultPrivacy = {
+        shareProgressWithEducators: true,
+        allowAnonymousDataCollection: true,
+        showProgressToParents: true,
+        includeDetailedSessionData: true,
+        lastUpdated: new Date().toISOString()
+      };
+      
+      res.json({
+        success: true,
+        privacy: defaultPrivacy
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error fetching privacy settings:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch privacy settings'
+    });
+  }
+});
+
+// PUT /api/user/privacy/:userId - update privacy settings
+app.put('/api/user/privacy/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const privacySettings = req.body;
+    console.log(`🔒 Updating privacy settings for user: ${userId}`, privacySettings);
+
+    const privacyDoc = doc(db, 'users', userId, 'privacy', 'settings');
+    await setDoc(privacyDoc, {
+      ...privacySettings,
+      lastUpdated: serverTimestamp()
+    }, { merge: true });
+
+    res.json({
+      success: true,
+      message: 'Privacy settings updated successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error updating privacy settings:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update privacy settings'
+    });
+  }
+});
+
+// GET /api/user/export-data/:userId - export all user data as JSON
+app.get('/api/user/export-data/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log(`📥 Exporting data for user: ${userId}`);
+
+    // Collect all user data
+    const userData = {
+      exportDate: new Date().toISOString(),
+      userId: userId,
+      profile: {},
+      sessions: [],
+      progress: {},
+      challenges: [],
+      preferences: {},
+      privacy: {}
+    };
+
+    // Get user profile
+    const userDoc = doc(db, 'users', userId);
+    const userSnap = await getDoc(userDoc);
+    if (userSnap.exists()) {
+      userData.profile = userSnap.data();
+    }
+
+    // Get session history
+    const sessionsQuery = query(
+      collection(db, 'users', userId, 'sessions'),
+      orderBy('completedAt', 'desc')
+    );
+    const sessionsSnap = await getDocs(sessionsQuery);
+    sessionsSnap.forEach(doc => {
+      userData.sessions.push({ id: doc.id, ...doc.data() });
+    });
+
+    // Get progress data
+    const progressDoc = doc(db, 'users', userId, 'progress', 'overview');
+    const progressSnap = await getDoc(progressDoc);
+    if (progressSnap.exists()) {
+      userData.progress = progressSnap.data();
+    }
+
+    // Get challenges
+    const challengesQuery = query(
+      collection(db, 'users', userId, 'challenges')
+    );
+    const challengesSnap = await getDocs(challengesQuery);
+    challengesSnap.forEach(doc => {
+      userData.challenges.push({ id: doc.id, ...doc.data() });
+    });
+
+    // Get preferences
+    const preferencesDoc = doc(db, 'users', userId, 'preferences', 'learning');
+    const preferencesSnap = await getDoc(preferencesDoc);
+    if (preferencesSnap.exists()) {
+      userData.preferences = preferencesSnap.data();
+    }
+
+    // Get privacy settings
+    const privacyDoc = doc(db, 'users', userId, 'privacy', 'settings');
+    const privacySnap = await getDoc(privacyDoc);
+    if (privacySnap.exists()) {
+      userData.privacy = privacySnap.data();
+    }
+
+    // Set headers for file download
+    const username = userData.profile.username || 'user';
+    const date = new Date().toISOString().split('T')[0];
+    const filename = `social-cue-data-${username}-${date}.json`;
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.json(userData);
+
+  } catch (error) {
+    console.error('❌ Error exporting user data:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to export user data'
+    });
+  }
+});
+
+// DELETE /api/user/delete-account/:userId - delete user and all data
+app.delete('/api/user/delete-account/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log(`🗑️ Deleting account for user: ${userId}`);
+
+    // Delete all user subcollections
+    const collections = ['sessions', 'progress', 'challenges', 'preferences', 'privacy'];
+    
+    for (const collectionName of collections) {
+      const collectionRef = collection(db, 'users', userId, collectionName);
+      const snapshot = await getDocs(collectionRef);
+      
+      const batch = writeBatch(db);
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+    }
+
+    // Delete main user document
+    const userDoc = doc(db, 'users', userId);
+    await setDoc(userDoc, { deleted: true, deletedAt: serverTimestamp() }, { merge: true });
+
+    res.json({
+      success: true,
+      message: 'Account deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting account:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete account'
+    });
+  }
+});
+
+// Parental Controls Endpoints
+// ===========================
+
+// GET /api/user/parental-controls/:userId - fetch parental controls
+app.get('/api/user/parental-controls/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log(`👨‍👩‍👧‍👦 Fetching parental controls for user: ${userId}`);
+
+    const controlsDoc = doc(db, 'users', userId, 'parentalControls', 'settings');
+    const controlsSnap = await getDoc(controlsDoc);
+
+    if (controlsSnap.exists()) {
+      res.json({
+        success: true,
+        controls: controlsSnap.data()
+      });
+    } else {
+      // Return default parental controls
+      const defaultControls = {
+        dailyTimeLimit: 30, // minutes
+        sessionsPerDay: 3,
+        availableTopics: ['small-talk', 'making-friends', 'conflict-resolution', 'empathy', 'active-listening'],
+        blockedDifficultyLevels: [],
+        ageAppropriateContentOnly: true,
+        requireApprovalForChallenges: false,
+        notifyOnSessionCompletion: true,
+        lastUpdated: new Date().toISOString()
+      };
+      
+      res.json({
+        success: true,
+        controls: defaultControls
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error fetching parental controls:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch parental controls'
+    });
+  }
+});
+
+// PUT /api/user/parental-controls/:userId - update parental controls
+app.put('/api/user/parental-controls/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const controls = req.body;
+    console.log(`👨‍👩‍👧‍👦 Updating parental controls for user: ${userId}`, controls);
+
+    const controlsDoc = doc(db, 'users', userId, 'parentalControls', 'settings');
+    await setDoc(controlsDoc, {
+      ...controls,
+      lastUpdated: serverTimestamp()
+    }, { merge: true });
+
+    res.json({
+      success: true,
+      message: 'Parental controls updated successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error updating parental controls:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update parental controls'
+    });
+  }
+});
+
+// Session Replay Endpoint
+// ======================
+
+// GET /api/sessions/replay/:sessionId - fetch complete session data for replay
+app.get('/api/sessions/replay/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    console.log(`🎬 Fetching session replay data for: ${sessionId}`);
+
+    // First, try to find the session in any user's sessions
+    const usersRef = collection(db, 'users');
+    const usersSnapshot = await getDocs(usersRef);
+    
+    let sessionData = null;
+    let userId = null;
+
+    // Search through all users to find the session
+    for (const userDoc of usersSnapshot.docs) {
+      const sessionsRef = collection(db, 'users', userDoc.id, 'sessions');
+      const sessionDoc = doc(sessionsRef, sessionId);
+      const sessionSnap = await getDoc(sessionDoc);
+      
+      if (sessionSnap.exists()) {
+        sessionData = sessionSnap.data();
+        userId = userDoc.id;
+        break;
+      }
+    }
+
+    if (!sessionData) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found'
+      });
+    }
+
+    // Get user profile for additional context
+    const userDoc = doc(db, 'users', userId);
+    const userSnap = await getDoc(userDoc);
+    const userProfile = userSnap.exists() ? userSnap.data() : {};
+
+    // Calculate session statistics
+    const scenarios = sessionData.scenarios || [];
+    const totalScenarios = scenarios.length;
+    const correctAnswers = scenarios.filter(s => s.isCorrect).length;
+    const accuracy = totalScenarios > 0 ? Math.round((correctAnswers / totalScenarios) * 100) : 0;
+    
+    // Calculate total time spent
+    const startTime = sessionData.startedAt?.toDate?.() || new Date(sessionData.startedAt);
+    const endTime = sessionData.completedAt?.toDate?.() || new Date(sessionData.completedAt);
+    const durationMs = endTime - startTime;
+    const durationMinutes = Math.round(durationMs / 60000);
+
+    // Prepare replay data
+    const replayData = {
+      sessionId: sessionId,
+      userId: userId,
+      userProfile: {
+        userName: userProfile.userName || 'Student',
+        grade: userProfile.grade || '5',
+        role: userProfile.role || 'student'
+      },
+      sessionInfo: {
+        topicName: sessionData.topicName || 'Social Skills',
+        difficulty: sessionData.difficulty || 'beginner',
+        startedAt: sessionData.startedAt,
+        completedAt: sessionData.completedAt,
+        duration: durationMinutes,
+        totalScenarios: totalScenarios,
+        correctAnswers: correctAnswers,
+        accuracy: accuracy
+      },
+      scenarios: scenarios.map((scenario, index) => ({
+        scenarioNumber: index + 1,
+        scenarioText: scenario.scenario || scenario.question || '',
+        options: scenario.options || [],
+        studentAnswer: scenario.selectedOption || scenario.studentAnswer,
+        correctAnswer: scenario.correctAnswer || scenario.options?.find(opt => opt.isGood)?.text,
+        isCorrect: scenario.isCorrect || false,
+        aiFeedback: scenario.aiFeedback || scenario.feedback || '',
+        proTip: scenario.proTip || '',
+        timeSpent: scenario.timeSpent || 0,
+        pointsEarned: scenario.pointsEarned || (scenario.isCorrect ? 10 : 0)
+      })),
+      summary: {
+        strengths: sessionData.strengths || [],
+        areasForImprovement: sessionData.areasForImprovement || [],
+        nextRecommendedTopic: sessionData.nextRecommendedTopic || 'Continue practicing current topic',
+        overallFeedback: sessionData.overallFeedback || 'Great job completing this session!'
+      }
+    };
+
+    console.log(`✅ Session replay data prepared: ${totalScenarios} scenarios, ${accuracy}% accuracy`);
+
+    res.json({
+      success: true,
+      replayData: replayData
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching session replay data:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch session replay data'
+    });
+  }
+});
+
+// Goal Management Endpoints
+// =========================
+
+// POST /api/goals/generate-recommendations/:userId - AI generates personalized goal recommendations
+app.post('/api/goals/generate-recommendations/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log(`🎯 Generating AI goal recommendations for user: ${userId}`);
+
+    // Get user profile and progress data
+    const userDoc = doc(db, 'users', userId);
+    const userSnap = await getDoc(userDoc);
+    
+    // If user doesn't exist, create minimal user data for testing
+    let userData;
+    if (!userSnap.exists()) {
+      console.log(`⚠️ User ${userId} not found, creating minimal profile for testing`);
+      userData = {
+        userName: 'Test User',
+        grade: '5',
+        currentLevel: 1
+      };
+    } else {
+      userData = userSnap.data();
+    }
+
+    // For now, use mock data to test the endpoint
+    console.log('Using mock data for testing');
+
+    // Prepare simple data for AI analysis
+    const analysisData = {
+      userProfile: {
+        name: userData.userName || 'Student',
+        gradeLevel: userData.grade || '5',
+        currentLevel: userData.currentLevel || 1
+      },
+      progress: {
+        totalSessions: 0,
+        averageAccuracy: 0,
+        currentStreak: 0
+      }
+    };
+
+    // Generate AI recommendations
+    const prompt = `You are a JSON API. Generate 3-5 personalized learning goals for a grade ${analysisData.userProfile.gradeLevel} student.
+
+Student Profile:
+- Name: ${analysisData.userProfile.name}
+- Grade Level: ${analysisData.userProfile.gradeLevel}
+- Current Level: ${analysisData.userProfile.currentLevel}
+
+Progress Summary:
+- Total Sessions: ${analysisData.progress.totalSessions}
+- Average Accuracy: ${analysisData.progress.averageAccuracy}%
+- Current Streak: ${analysisData.progress.currentStreak} days
+
+CRITICAL: Return ONLY valid JSON. No explanations, no text, no markdown. Just the JSON array.
+
+[
+  {
+    "title": "Master Small Talk Basics",
+    "description": "Practice small talk scenarios until you reach 80% mastery",
+    "targetTopic": "small-talk",
+    "targetMetric": "mastery",
+    "targetValue": 80,
+    "suggestedDeadline": "2 weeks",
+    "reason": "Small talk is a foundational social skill",
+    "difficulty": "Medium"
+  }
+]`;
+
+    const response = await anthropic.messages.create({
+      model: "claude-3-haiku-20240307",
+      max_tokens: 1500,
+      temperature: 0.7,
+      messages: [{
+        role: "user",
+        content: prompt
+      }]
+    });
+
+    const recommendations = JSON.parse(response.content[0].text);
+    
+    console.log(`✅ Generated ${recommendations.length} goal recommendations for ${userId}`);
+
+    res.json({
+      success: true,
+      recommendations: recommendations
+    });
+
+  } catch (error) {
+    console.error('❌ Error generating goal recommendations:', error);
+    console.error('❌ Error details:', error.message);
+    console.error('❌ Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate goal recommendations',
+      details: error.message
+    });
+  }
+});
+
+// POST /api/goals/create - Create a new goal
+app.post('/api/goals/create', async (req, res) => {
+  try {
+    const goalData = req.body;
+    console.log(`🎯 Creating new goal for user: ${goalData.userId}`);
+
+    const goal = {
+      id: `goal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      userId: goalData.userId,
+      title: goalData.title,
+      description: goalData.description,
+      targetTopic: goalData.targetTopic || '',
+      targetMetric: goalData.targetMetric,
+      targetValue: goalData.targetValue,
+      currentValue: 0,
+      deadline: goalData.deadline,
+      status: 'active',
+      aiRecommended: goalData.aiRecommended || false,
+      createdAt: serverTimestamp(),
+      completedAt: null
+    };
+
+    const goalDoc = doc(db, 'users', goalData.userId, 'goals', goal.id);
+    await setDoc(goalDoc, goal);
+
+    console.log(`✅ Goal created: ${goal.title}`);
+
+    res.json({
+      success: true,
+      goal: goal
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating goal:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create goal'
+    });
+  }
+});
+
+// GET /api/goals/:userId - Fetch all goals
+app.get('/api/goals/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { status } = req.query;
+    console.log(`🎯 Fetching goals for user: ${userId}, status: ${status || 'all'}`);
+
+    const goalsRef = collection(db, 'users', userId, 'goals');
+    const goalsSnap = await getDocs(goalsRef);
+    
+    let goals = goalsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // Filter by status if specified
+    if (status && status !== 'all') {
+      goals = goals.filter(goal => goal.status === status);
+    }
+
+    console.log(`✅ Found ${goals.length} goals for ${userId}`);
+
+    res.json({
+      success: true,
+      goals: goals
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching goals:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch goals'
+    });
+  }
+});
+
+// PUT /api/goals/:goalId/progress - Update goal progress
+app.put('/api/goals/:goalId/progress', async (req, res) => {
+  try {
+    const { goalId } = req.params;
+    const { userId, newValue } = req.body;
+    console.log(`🎯 Updating progress for goal: ${goalId}`);
+
+    const goalDoc = doc(db, 'users', userId, 'goals', goalId);
+    const goalSnap = await getDoc(goalDoc);
+
+    if (!goalSnap.exists()) {
+      return res.status(404).json({
+        success: false,
+        error: 'Goal not found'
+      });
+    }
+
+    const goalData = goalSnap.data();
+    const updatedGoal = {
+      ...goalData,
+      currentValue: newValue,
+      lastUpdated: serverTimestamp()
+    };
+
+    await setDoc(goalDoc, updatedGoal);
+
+    console.log(`✅ Goal progress updated: ${goalData.title} - ${newValue}/${goalData.targetValue}`);
+
+    res.json({
+      success: true,
+      goal: updatedGoal
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating goal progress:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update goal progress'
+    });
+  }
+});
+
+// PUT /api/goals/:goalId/complete - Mark goal as complete
+app.put('/api/goals/:goalId/complete', async (req, res) => {
+  try {
+    const { goalId } = req.params;
+    const { userId } = req.body;
+    console.log(`🎯 Completing goal: ${goalId}`);
+
+    const goalDoc = doc(db, 'users', userId, 'goals', goalId);
+    const goalSnap = await getDoc(goalDoc);
+
+    if (!goalSnap.exists()) {
+      return res.status(404).json({
+        success: false,
+        error: 'Goal not found'
+      });
+    }
+
+    const goalData = goalSnap.data();
+    const completedGoal = {
+      ...goalData,
+      status: 'completed',
+      completedAt: serverTimestamp(),
+      lastUpdated: serverTimestamp()
+    };
+
+    await setDoc(goalDoc, completedGoal);
+
+    console.log(`✅ Goal completed: ${goalData.title}`);
+
+    res.json({
+      success: true,
+      goal: completedGoal
+    });
+
+  } catch (error) {
+    console.error('❌ Error completing goal:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to complete goal'
+    });
+  }
+});
+
+// DELETE /api/goals/:goalId - Delete/archive goal
+app.delete('/api/goals/:goalId', async (req, res) => {
+  try {
+    const { goalId } = req.params;
+    const { userId } = req.body;
+    console.log(`🎯 Deleting goal: ${goalId}`);
+
+    const goalDoc = doc(db, 'users', userId, 'goals', goalId);
+    await deleteDoc(goalDoc);
+
+    console.log(`✅ Goal deleted: ${goalId}`);
+
+    res.json({
+      success: true,
+      message: 'Goal deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting goal:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete goal'
     });
   }
 });

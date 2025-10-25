@@ -14,15 +14,21 @@ import {
   MessageCircle,
   Star,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  Sparkles
 } from 'lucide-react';
+import SessionReplayModal from './SessionReplayModal';
 
 const ParentChildOverview = ({ childUserId, darkMode, onNavigate }) => {
   const [childData, setChildData] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [insights, setInsights] = useState(null);
+  const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedSessionId, setSelectedSessionId] = useState(null);
+  const [showReplayModal, setShowReplayModal] = useState(false);
 
   useEffect(() => {
     if (childUserId) {
@@ -55,6 +61,14 @@ const ParentChildOverview = ({ childUserId, darkMode, onNavigate }) => {
         setInsights(insightsResult.insights);
       }
       
+      // Fetch goals
+      const goalsResponse = await fetch(`http://localhost:3001/api/goals/${childUserId}?status=active`);
+      const goalsResult = await goalsResponse.json();
+      
+      if (goalsResult.success) {
+        setGoals(goalsResult.goals);
+      }
+      
       setLoading(false);
     } catch (error) {
       console.error('Error fetching child data:', error);
@@ -79,6 +93,16 @@ const ParentChildOverview = ({ childUserId, darkMode, onNavigate }) => {
       default:
         return <Activity className="w-4 h-4 text-gray-500" />;
     }
+  };
+
+  const handleViewSessionDetails = (sessionId) => {
+    setSelectedSessionId(sessionId);
+    setShowReplayModal(true);
+  };
+
+  const handleCloseReplayModal = () => {
+    setShowReplayModal(false);
+    setSelectedSessionId(null);
   };
 
   if (loading) {
@@ -222,6 +246,19 @@ const ParentChildOverview = ({ childUserId, darkMode, onNavigate }) => {
                         {activity.score && ` • ${activity.score}% accuracy`}
                       </div>
                     </div>
+                    {activity.type === 'practice_session' && activity.sessionId && (
+                      <button
+                        onClick={() => handleViewSessionDetails(activity.sessionId)}
+                        className={`flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-semibold transition-colors ${
+                          darkMode 
+                            ? 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-400' 
+                            : 'bg-blue-100 hover:bg-blue-200 text-blue-600'
+                        }`}
+                      >
+                        <Eye className="w-4 h-4" />
+                        View Details
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -269,6 +306,104 @@ const ParentChildOverview = ({ childUserId, darkMode, onNavigate }) => {
           </div>
         </section>
 
+        {/* Learning Goals */}
+        {goals.length > 0 && (
+          <section className="mb-8">
+            <div className={`backdrop-blur-xl border rounded-2xl p-6 ${
+              darkMode ? 'bg-white/8 border-white/20' : 'bg-white border-gray-200 shadow-sm'
+            }`}>
+              <div className="flex items-center gap-3 mb-4">
+                <Target className="w-6 h-6 text-purple-400" />
+                <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Learning Goals
+                </h2>
+                <span className={`text-sm px-2 py-1 rounded-full ${
+                  darkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-600'
+                }`}>
+                  {goals.length} active
+                </span>
+              </div>
+              
+              <div className="space-y-3">
+                {goals.slice(0, 3).map((goal) => {
+                  const progress = (goal.currentValue / goal.targetValue) * 100;
+                  const deadline = goal.deadline?.toDate ? goal.deadline.toDate() : new Date(goal.deadline);
+                  const daysRemaining = Math.ceil((deadline - new Date()) / (1000 * 60 * 60 * 24));
+                  
+                  return (
+                    <div
+                      key={goal.id}
+                      className={`p-3 rounded-xl border ${
+                        darkMode ? 'bg-white/5 border-white/10' : 'bg-gray-50 border-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {goal.title}
+                          </h3>
+                          {goal.aiRecommended && (
+                            <Sparkles className="w-4 h-4 text-purple-400" />
+                          )}
+                        </div>
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          daysRemaining < 0 ? 'text-red-600 bg-red-100 dark:bg-red-900/30' :
+                          daysRemaining <= 1 ? 'text-orange-600 bg-orange-100 dark:bg-orange-900/30' :
+                          'text-green-600 bg-green-100 dark:bg-green-900/30'
+                        }`}>
+                          {daysRemaining < 0 ? 'Overdue' : 
+                           daysRemaining === 0 ? 'Due today' :
+                           daysRemaining === 1 ? 'Due tomorrow' :
+                           `${daysRemaining} days left`}
+                        </span>
+                      </div>
+                      
+                      <div className="mb-2">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                            Progress
+                          </span>
+                          <span className={`text-sm font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {goal.currentValue}/{goal.targetValue} ({Math.round(progress)}%)
+                          </span>
+                        </div>
+                        <div className={`h-2 rounded-full overflow-hidden ${
+                          darkMode ? 'bg-white/10' : 'bg-gray-200'
+                        }`}>
+                          <div
+                            className={`h-full transition-all duration-500 ${
+                              progress >= 80 ? 'bg-green-400' :
+                              progress >= 50 ? 'bg-yellow-400' : 'bg-blue-400'
+                            }`}
+                            style={{ width: `${Math.min(progress, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between text-sm">
+                        <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                          Target: {goal.targetValue}{goal.targetMetric === 'mastery' ? '%' : ''} {goal.targetMetric}
+                        </span>
+                        {goal.targetTopic && (
+                          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                            Topic: {goal.targetTopic}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {goals.length > 3 && (
+                <p className={`text-sm text-center mt-3 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  +{goals.length - 3} more goals
+                </p>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* AI Insights for Parents */}
         <section className="mb-8">
           <div className={`backdrop-blur-xl border rounded-2xl p-6 ${
@@ -291,6 +426,18 @@ const ParentChildOverview = ({ childUserId, darkMode, onNavigate }) => {
               <p className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
                 <strong>This Week:</strong> Great consistency! Encourage {childData.name} to keep up the daily practice.
               </p>
+              
+              {/* Goal-specific insights */}
+              {goals.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-blue-500/20">
+                  <p className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
+                    <strong>Goal Support:</strong> Help {childData.name} stay focused on their learning goals. 
+                    {goals.some(goal => goal.targetTopic) && 
+                      ` Practice ${goals.find(goal => goal.targetTopic)?.targetTopic} at home.`
+                    }
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -322,6 +469,19 @@ const ParentChildOverview = ({ childUserId, darkMode, onNavigate }) => {
                         {activity.score && ` • ${activity.score}% accuracy`}
                       </div>
                     </div>
+                    {activity.type === 'practice_session' && activity.sessionId && (
+                      <button
+                        onClick={() => handleViewSessionDetails(activity.sessionId)}
+                        className={`flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-semibold transition-colors ${
+                          darkMode 
+                            ? 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-400' 
+                            : 'bg-blue-100 hover:bg-blue-200 text-blue-600'
+                        }`}
+                      >
+                        <Eye className="w-4 h-4" />
+                        View Details
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -330,6 +490,13 @@ const ParentChildOverview = ({ childUserId, darkMode, onNavigate }) => {
         )}
       </div>
 
+      {/* Session Replay Modal */}
+      <SessionReplayModal
+        sessionId={selectedSessionId}
+        isOpen={showReplayModal}
+        onClose={handleCloseReplayModal}
+        darkMode={darkMode}
+      />
     </div>
   );
 };

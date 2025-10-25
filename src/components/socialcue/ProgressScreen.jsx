@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, Award, Target, Users, Clock, CheckCircle, Star, BookOpen, Calendar, History, ChevronDown, ChevronRight, Filter } from 'lucide-react';
+import { TrendingUp, Award, Target, Users, Clock, CheckCircle, Star, BookOpen, Calendar, History, ChevronDown, ChevronRight, Filter, Play } from 'lucide-react';
 import { getUserData } from './utils/storage';
+import SessionReplayModal from './SessionReplayModal';
 
 function ProgressScreen({ userData, darkMode, onNavigate }) {
   const [masteryData, setMasteryData] = useState(null);
@@ -10,6 +11,8 @@ function ProgressScreen({ userData, darkMode, onNavigate }) {
   const [historyError, setHistoryError] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [expandedSession, setExpandedSession] = useState(null);
+  const [selectedSessionId, setSelectedSessionId] = useState(null);
+  const [showReplayModal, setShowReplayModal] = useState(false);
 
   // Set basic demo data (no API calls)
   useEffect(() => {
@@ -310,6 +313,17 @@ function ProgressScreen({ userData, darkMode, onNavigate }) {
 
   const toggleSessionExpansion = (sessionId) => {
     setExpandedSession(expandedSession === sessionId ? null : sessionId);
+  };
+
+  const handleReplaySession = (sessionId, event) => {
+    event.stopPropagation(); // Prevent expanding the session card
+    setSelectedSessionId(sessionId);
+    setShowReplayModal(true);
+  };
+
+  const handleCloseReplayModal = () => {
+    setShowReplayModal(false);
+    setSelectedSessionId(null);
   };
 
   if (loading) {
@@ -667,8 +681,21 @@ function ProgressScreen({ userData, darkMode, onNavigate }) {
                         <div className={`text-xl font-bold ${getAccuracyColor(session.accuracy)}`}>
                           {session.correctAnswers}/{session.totalQuestions} ({session.accuracy}%)
                         </div>
-                        <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                          {expandedSession === session.sessionId ? 'Click to collapse' : 'Click to expand'}
+                        <div className="flex items-center gap-2 mt-1">
+                          <button
+                            onClick={(e) => handleReplaySession(session.sessionId, e)}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                              darkMode 
+                                ? 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-400' 
+                                : 'bg-blue-100 hover:bg-blue-200 text-blue-600'
+                            }`}
+                          >
+                            <Play className="w-3 h-3" />
+                            Replay
+                          </button>
+                          <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                            {expandedSession === session.sessionId ? 'Click to collapse' : 'Click to expand'}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -706,6 +733,14 @@ function ProgressScreen({ userData, darkMode, onNavigate }) {
           </>
         )}
       </div>
+
+      {/* Session Replay Modal */}
+      <SessionReplayModal
+        sessionId={selectedSessionId}
+        isOpen={showReplayModal}
+        onClose={handleCloseReplayModal}
+        darkMode={darkMode}
+      />
     </div>
   );
 }

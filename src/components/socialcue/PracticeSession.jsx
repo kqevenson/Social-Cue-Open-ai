@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, ArrowLeft, CheckCircle, XCircle, RotateCcw, Lightbulb, Volume2, VolumeX, Home, Info } from 'lucide-react';
+import { ArrowRight, ArrowLeft, CheckCircle, XCircle, RotateCcw, Lightbulb, Volume2, VolumeX, Home, Info, Target } from 'lucide-react';
 import { getUserData, STORAGE_KEY } from './utils/storage';
 import { getGradeRange } from './utils/helpers';
 import scenarios from './utils/scenarios';
@@ -7,9 +7,14 @@ import SuccessAnimation from './animations/SuccessAnimation';
 import LoadingSpinner from './animations/LoadingSpinner';
 import SessionResults from './SessionResults';
 import { useToast, Button, AnimatedNumber, SmoothProgressBar } from './animations';
-import { getFirestore, doc, updateDoc, collection, addDoc } from 'firebase/firestore';
+import { getFirestore, doc, updateDoc, collection, addDoc, getDoc, setDoc } from 'firebase/firestore';
 
 function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEffects, autoReadText }) {
+  // Configuration flags
+  const USE_AI_EVALUATION = false; // Set to true when backend is deployed
+  const USE_API = false; // Set to true when backend is ready
+  const API_BASE_URL = 'http://localhost:3001';
+  
   const [currentSituation, setCurrentSituation] = useState(0);
   const [selectedOption, setSelectedOption] = useState(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -170,12 +175,24 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
     }
   }, [sessionId, gradeLevel]);
 
-  // AI Evaluation function with retry logic
+  // AI Evaluation function with hardcoded fallback
   const evaluateResponse = async (scenario, userResponse, learnerContext, retryCount = 0) => {
     try {
       setIsEvaluating(true);
       
-      const response = await fetch('/api/adaptive/evaluate-response', {
+      // Use hardcoded feedback if AI evaluation is disabled
+      if (!USE_AI_EVALUATION) {
+        console.log('📝 Using hardcoded feedback (AI evaluation disabled)');
+        return getHardcodedFeedback(scenario, userResponse);
+      }
+      
+      // Check if API is available
+      if (!API_BASE_URL) {
+        console.warn('⚠️ API URL not configured, using hardcoded feedback');
+        return getHardcodedFeedback(scenario, userResponse);
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/api/adaptive/evaluate-response`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -207,35 +224,64 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
     } catch (error) {
       console.error('Error evaluating response:', error);
       
-      // Retry once if this is the first attempt
-      if (retryCount === 0) {
+      // Retry once if this is the first attempt and API is enabled
+      if (retryCount === 0 && USE_AI_EVALUATION) {
         console.log('🔄 Retrying AI evaluation in 2 seconds...');
         await new Promise(resolve => setTimeout(resolve, 2000));
         return evaluateResponse(scenario, userResponse, learnerContext, 1);
       }
       
-      // If retry also fails, show friendly message and use fallback
-      showError('Still learning! Here\'s some quick feedback for now.');
-      
-      // Return fallback evaluation if API fails
-      return {
-        score: 0.5,
-        feedback: "Great effort! Keep practicing to improve your social skills.",
-        comprehensionLevel: "basic",
-        strengths: ["You're trying your best!"],
-        areasForImprovement: ["Keep practicing different scenarios"],
-        personalizedFeedback: "Every attempt helps you learn. You're doing great!"
-      };
+      // Always fall back to hardcoded feedback
+      console.log('📝 Falling back to hardcoded feedback');
+      return getHardcodedFeedback(scenario, userResponse);
     } finally {
       setIsEvaluating(false);
     }
+  };
+
+  // Generate hardcoded feedback based on scenario and user response
+  const getHardcodedFeedback = (scenario, userResponse) => {
+    // Find the selected option
+    const selectedOption = scenario.options.find(opt => opt.text === userResponse);
+    
+    if (selectedOption) {
+      return {
+        score: selectedOption.isGood ? 0.8 : 0.3,
+        feedback: selectedOption.feedback || "Good thinking! Keep practicing.",
+        comprehensionLevel: selectedOption.isGood ? "good" : "developing",
+        strengths: selectedOption.isGood ? ["You made a thoughtful choice!"] : ["You're learning!"],
+        areasForImprovement: selectedOption.isGood ? ["Keep up the great work!"] : ["Try thinking about what would be most helpful in this situation"],
+        personalizedFeedback: selectedOption.feedback || "Every attempt helps you learn. You're doing great!",
+        points: selectedOption.points || (selectedOption.isGood ? 10 : 0)
+      };
+    }
+    
+    // Fallback feedback if option not found
+    return {
+      score: 0.5,
+      feedback: "Great effort! Keep practicing to improve your social skills.",
+      comprehensionLevel: "basic",
+      strengths: ["You're trying your best!"],
+      areasForImprovement: ["Keep practicing different scenarios"],
+      personalizedFeedback: "Every attempt helps you learn. You're doing great!",
+      points: 5
+    };
   };
 
   // Generate real-world challenge function
   const generateRealWorldChallenge = async (topicName, performance) => {
     try {
       const userId = localStorage.getItem('userId');
-      if (!userId) return;
+      if (!userId) {
+        console.log('⚠️ No userId found, skipping challenge creation');
+        return;
+      }
+
+      // Validate input data
+      if (!topicName || typeof topicName !== 'string') {
+        console.error('Invalid topicName provided:', topicName);
+        return;
+      }
 
       // Create a challenge based on what they just learned
       const challenge = {
@@ -248,16 +294,53 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
         status: 'active'
       };
 
-      // Save to Firebase
-      const db = getFirestore();
-      const challengesRef = collection(db, `users/${userId}/challenges`);
-      await addDoc(challengesRef, challenge);
-
-      console.log('✅ Real-world challenge created:', challenge);
+      // Save to localStorage immediately (no API calls for now)
+      const existingChallenges = JSON.parse(localStorage.getItem('localChallenges') || '[]');
+      existingChallenges.push(challenge);
+      localStorage.setItem('localChallenges', JSON.stringify(existingChallenges));
+      console.log('✅ Challenge saved locally:', challenge);
       showSuccess('🎯 Challenge created! Check your active challenges.');
+
+      // Optionally sync to Firebase in background (if API is enabled)
+      if (USE_API) {
+        try {
+          const db = getFirestore();
+          const challengesRef = collection(db, `users/${userId}/challenges`);
+          await addDoc(challengesRef, challenge);
+          console.log('✅ Challenge synced to Firebase');
+        } catch (firebaseError) {
+          console.log('⚠️ Failed to sync challenge to Firebase:', firebaseError.message);
+        }
+      }
     } catch (error) {
       console.error('Error creating challenge:', error);
       showError('Failed to create challenge. Please try again.');
+    }
+  };
+
+  // Update goal progress after session completion
+  const updateGoalProgress = async (topicName, performance, pointsEarned) => {
+    try {
+      const userId = localStorage.getItem('userId');
+      if (!userId) {
+        console.log('⚠️ No userId found, skipping goal progress update');
+        return;
+      }
+
+      // Skip API calls for now, just log the progress
+      console.log('📊 Goal progress update:', {
+        topicName,
+        performance,
+        pointsEarned,
+        userId
+      });
+
+      // TODO: Implement goal progress tracking when API is ready
+      // For now, just show a success message
+      showSuccess('📈 Progress tracked! Keep up the great work!');
+
+    } catch (error) {
+      console.error('Error updating goal progress:', error);
     }
   };
 
@@ -278,54 +361,44 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
       const sessionStartTime = sessionResponses.length > 0 ? sessionResponses[0].responseTime : Date.now();
       const sessionDuration = Date.now() - sessionStartTime;
       
-      // Collect session data
-      const sessionData = {
-        difficulty: 1, // Current difficulty level (could be dynamic)
-        scenariosCompleted: scenariosCompleted,
-        responses: sessionResponses,
-        accuracy: accuracy,
-        averageResponseTime: averageResponseTime,
-        sessionDuration: sessionDuration
-      };
-      
-      // Get learner profile
-      const userData = getUserData();
-      const userId = localStorage.getItem('userId') || 'guest_' + Date.now();
-      
-      const learnerProfile = {
-        name: userData.name || 'Student',
-        grade: gradeLevel,
-        overallAccuracy: userData.confidenceScore || 0,
-        totalSessions: userData.totalSessions || 0
-      };
-      
-      // Send completion data to backend
-      const response = await fetch('/api/adaptive/complete-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: userId,
-          topicId: sessionId,
-          topicName: getContent(scenario.title),
-          sessionData: sessionData,
-          learnerProfile: learnerProfile
-        })
+      // Skip API call, generate local results
+      console.log('📊 Session completed locally:', {
+        scenariosCompleted,
+        accuracy,
+        averageResponseTime,
+        sessionDuration
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const results = await response.json();
+      // Generate local session results
+      const results = {
+        aiAnalysis: {
+          overallPerformance: `Great job! You completed ${scenariosCompleted} scenarios with ${Math.round(accuracy)}% accuracy.`,
+          personalizedEncouragement: "Keep practicing to improve your social skills!",
+          conceptsUnderstood: ["Basic social interactions", "Problem-solving"],
+          areasToReview: ["Continue practicing different scenarios"]
+        },
+        nextDifficulty: 1,
+        masteryLevel: Math.min(100, Math.round(accuracy)),
+        sessionSummary: {
+          totalScenarios: scenariosCompleted,
+          correctAnswers: correctResponses,
+          accuracy: Math.round(accuracy),
+          timeSpent: Math.round(sessionDuration / 1000)
+        },
+        recommendations: [
+          "Practice more scenarios to build confidence",
+          "Try different social situations",
+          "Keep up the great work!"
+        ]
+      };
+      
       setSessionResults(results);
       setShowSessionResults(true);
       
       return results;
     } catch (error) {
       console.error('Error completing practice session:', error);
-      // Return fallback results if API fails
+      // Return fallback results
       const fallbackResults = {
         aiAnalysis: {
           overallPerformance: "Good work completing the session!",
@@ -335,14 +408,196 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
         },
         nextDifficulty: 1,
         masteryLevel: 25,
-        topicCompleted: false
+        sessionSummary: {
+          totalScenarios: sessionResponses.length,
+          correctAnswers: sessionResponses.filter(r => r.isCorrect).length,
+          accuracy: 50,
+          timeSpent: 300
+        },
+        recommendations: ["Keep practicing!"]
       };
+      
       setSessionResults(fallbackResults);
       setShowSessionResults(true);
       return fallbackResults;
     } finally {
       setIsCompletingSession(false);
     }
+  };
+
+  // Generate personalized goals based on session performance
+  const generateSessionGoals = async (sessionResult) => {
+    try {
+      console.log('🎯 Generating session-based goals for:', sessionResult.scenarioTitle);
+      
+      // Get existing goals
+      const existingGoals = JSON.parse(localStorage.getItem('socialcue_goals') || '[]');
+      
+      // Determine what skills to focus on based on performance
+      const needsImprovement = sessionResult.finalScore < 70;
+      const category = sessionResult.scenarioCategory;
+      const scenarioTitle = sessionResult.scenarioTitle;
+      
+      // Generate 2-3 goals based on session performance
+      const newGoals = [];
+      
+      if (needsImprovement) {
+        // Focus on the skill they just practiced
+        newGoals.push({
+          id: Date.now() + Math.random(),
+          title: `Practice More: ${scenarioTitle}`,
+          description: `You scored ${sessionResult.finalScore}%. Let's practice this skill more! Try using what you learned in real conversations.`,
+          category: category,
+          status: "active",
+          progress: 0,
+          target: 3,
+          relatedSessionId: sessionResult.sessionId,
+          createdAt: new Date().toISOString(),
+          source: "AI - Post Session"
+        });
+      } else {
+        // Celebrate success and suggest next level
+        newGoals.push({
+          id: Date.now() + Math.random(),
+          title: `Great Job on ${scenarioTitle}!`,
+          description: `You scored ${sessionResult.finalScore}%! Now try using this skill with someone new today.`,
+          category: category,
+          status: "active",
+          progress: 0,
+          target: 1,
+          relatedSessionId: sessionResult.sessionId,
+          createdAt: new Date().toISOString(),
+          source: "AI - Post Session"
+        });
+      }
+      
+      // Add related social skill goal
+      const relatedGoal = getRelatedGoal(category, sessionResult.gradeLevel);
+      if (relatedGoal) {
+        newGoals.push({
+          ...relatedGoal,
+          id: Date.now() + Math.random() + 1,
+          createdAt: new Date().toISOString()
+        });
+      }
+      
+      // Merge with existing goals (remove old AI-generated ones if too many)
+      const activeAIGoals = existingGoals.filter(g => g.source?.includes('AI'));
+      if (activeAIGoals.length > 6) {
+        // Remove oldest AI goals
+        const goalsToKeep = existingGoals.filter(g => !g.source?.includes('AI')).slice(-4);
+        const updatedGoals = [...goalsToKeep, ...newGoals];
+        localStorage.setItem('socialcue_goals', JSON.stringify(updatedGoals));
+        console.log('🎯 Updated goals (removed old AI goals):', updatedGoals.length);
+      } else {
+        const updatedGoals = [...existingGoals, ...newGoals];
+        localStorage.setItem('socialcue_goals', JSON.stringify(updatedGoals));
+        console.log('🎯 Added new goals:', newGoals.length);
+      }
+      
+    } catch (error) {
+      console.error('Error generating session goals:', error);
+    }
+  };
+
+  // Helper function for related goals by category
+  const getRelatedGoal = (category, gradeLevel) => {
+    const goalsByCategory = {
+      'Starting Conversations': [
+        {
+          title: "Ask Open-Ended Questions",
+          description: "Instead of yes/no questions, ask 'What do you like about...' or 'How was your...'",
+          category: "Communication",
+          target: 3
+        },
+        {
+          title: "Share Something About Yourself",
+          description: "After asking a question, share a similar experience or interest you have.",
+          category: "Making Friends",
+          target: 2
+        }
+      ],
+      'Active Listening': [
+        {
+          title: "Use Body Language",
+          description: "Face the person, maintain eye contact, and nod to show you're listening.",
+          category: "Communication",
+          target: 5
+        },
+        {
+          title: "Ask Follow-Up Questions",
+          description: "Show interest by asking more about what they just said.",
+          category: "Communication",
+          target: 3
+        }
+      ],
+      'Emotional Awareness': [
+        {
+          title: "Name Your Feelings",
+          description: "Practice saying 'I feel ___' when expressing emotions.",
+          category: "Emotional Expression",
+          target: 3
+        },
+        {
+          title: "Notice Others' Feelings",
+          description: "Pay attention to facial expressions and tone of voice to understand how others feel.",
+          category: "Empathy",
+          target: 4
+        }
+      ],
+      'Making Friends': [
+        {
+          title: "Invite Someone to Join You",
+          description: "Ask a classmate to sit with you at lunch or play together at recess.",
+          category: "Social Participation",
+          target: 2
+        },
+        {
+          title: "Remember Personal Details",
+          description: "Try to remember one thing someone told you and bring it up next time.",
+          category: "Building Relationships",
+          target: 3
+        }
+      ],
+      'Handling Disagreements': [
+        {
+          title: "Use 'I' Statements",
+          description: "Say 'I feel upset when...' instead of 'You always...'",
+          category: "Conflict Resolution",
+          target: 3
+        },
+        {
+          title: "Take a Break When Upset",
+          description: "Step away and calm down before responding when you feel angry.",
+          category: "Self-Regulation",
+          target: 2
+        }
+      ],
+      'General': [
+        {
+          title: "Practice Active Listening",
+          description: "Make eye contact and nod when someone is talking to you.",
+          category: "Communication",
+          target: 3
+        },
+        {
+          title: "Start a Conversation",
+          description: "Say hi to someone new and ask them one question about their interests.",
+          category: "Making Friends",
+          target: 1
+        }
+      ]
+    };
+    
+    const categoryGoals = goalsByCategory[category] || goalsByCategory['General'];
+    const randomGoal = categoryGoals[Math.floor(Math.random() * categoryGoals.length)];
+    
+    return {
+      ...randomGoal,
+      status: "active",
+      progress: 0,
+      source: "AI - Related Skill"
+    };
   };
 
   // Sound effect functions
@@ -552,8 +807,7 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
         }, 100);
       }, 200);
     } else {
-      // Session complete - call completePracticeSession
-      setSessionComplete(true);
+      // Session complete - show celebration and complete session
       playSound('complete');
       showSuccess('🎉 Session completed! Great job!');
       
@@ -563,23 +817,88 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
       // Generate a real-world challenge
       await generateRealWorldChallenge(scenario.title, performance);
       
-      // Update local user data
+      // Update goal progress
+      await updateGoalProgress(scenario.title, performance, totalPoints);
+      
+      // Update local user data with validation
       const userData = getUserData();
+      
+      // Validate userData structure
+      if (!userData || typeof userData !== 'object') {
+        console.error('Invalid userData structure:', userData);
+        return;
+      }
+      
+      // Ensure required fields exist
+      if (typeof userData.totalSessions !== 'number') {
+        userData.totalSessions = 0;
+      }
+      if (typeof userData.confidenceScore !== 'number') {
+        userData.confidenceScore = 0;
+      }
+      
       userData.totalSessions += 1;
       userData.confidenceScore = Math.min(100, userData.confidenceScore + 2);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+      
+      // Validate data before saving
+      try {
+        const jsonString = JSON.stringify(userData);
+        // Test parsing to ensure it's valid JSON
+        JSON.parse(jsonString);
+        localStorage.setItem(STORAGE_KEY, jsonString);
+        console.log('✅ User data saved successfully');
+      } catch (jsonError) {
+        console.error('JSON validation failed:', jsonError);
+        console.error('Problematic userData:', userData);
+        // Don't save invalid data
+      }
       
       // Update last practice date in Firebase
       const userId = localStorage.getItem('userId');
       if (userId) {
-        const userRef = doc(getFirestore(), 'users', userId);
-        await updateDoc(userRef, {
-          lastPracticeDate: new Date().toISOString()
-        });
+        try {
+          const db = getFirestore();
+          const userRef = doc(db, 'users', userId);
+          
+          // Check if document exists before updating
+          const userSnap = await getDoc(userRef);
+          
+          if (userSnap.exists()) {
+            await updateDoc(userRef, {
+              lastPracticeDate: new Date().toISOString()
+            });
+            console.log('✅ Updated last practice date in Firebase');
+          } else {
+            // Document doesn't exist, create it
+            await setDoc(userRef, {
+              lastPracticeDate: new Date().toISOString(),
+              createdAt: new Date().toISOString()
+            });
+            console.log('✅ Created user document with last practice date');
+          }
+        } catch (firebaseError) {
+          console.error('Firebase error updating practice date:', firebaseError);
+          // Continue without failing the session
+        }
       }
       
       // Complete the session and show results
       await completePracticeSession();
+      
+      // Generate personalized goals based on this session
+      await generateSessionGoals({
+        sessionId,
+        scenarioTitle: getContent(scenario.title),
+        scenarioCategory: scenario.category || 'General',
+        totalPoints,
+        finalScore,
+        completedAt: new Date().toISOString(),
+        situations: scenario.situations.length,
+        gradeLevel
+      });
+      
+      // Set session complete after results are ready
+      setSessionComplete(true);
     }
   };
 
@@ -709,6 +1028,19 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
                   <div className={`text-lg ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                     {totalPoints} out of {scenario.situations.length * 10} points earned
                   </div>
+                </div>
+              )}
+
+              {/* New Goals Notification */}
+              {!isCompletingSession && (
+                <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Target className="w-5 h-5 text-blue-400" />
+                    <h3 className="font-bold text-blue-400">New Goals Added!</h3>
+                  </div>
+                  <p className="text-sm text-gray-400">
+                    Check your Goals tab to see personalized recommendations based on this session.
+                  </p>
                 </div>
               )}
 

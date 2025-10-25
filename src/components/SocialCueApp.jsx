@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Home, Target, TrendingUp, Settings, BookOpen, User, BarChart3 } from 'lucide-react';
+import { Home, Target, TrendingUp, Settings, BookOpen, User, BarChart3, Star } from 'lucide-react';
 import { getUserData, saveUserData } from './socialcue/utils/storage';
 import { lessonApiService } from '../services/lessonApi';
 import { ToastProvider, ErrorBoundary } from './socialcue/animations';
@@ -14,6 +14,7 @@ import AILessonSession from './socialcue/AILessonSession';
 import AIPracticeSession from './AIPracticeSession';
 import LessonsScreen from './socialcue/LessonsScreen';
 import LearningPreferencesScreen from './socialcue/LearningPreferencesScreen';
+import GoalsScreen from './socialcue/GoalsScreen';
 import BottomNav from './socialcue/BottomNav';
 
 function SocialCueApp({ onLogout }) {
@@ -25,6 +26,24 @@ function SocialCueApp({ onLogout }) {
   const [notifications, setNotifications] = useState(true);
   const [sessionId, setSessionId] = useState(1);
   const [selectedChildId, setSelectedChildId] = useState(null);
+  
+  // Calculate new goals count (goals created in the last 5 minutes)
+  const getNewGoalsCount = () => {
+    try {
+      const goals = JSON.parse(localStorage.getItem('socialcue_goals') || '[]');
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      
+      return goals.filter(goal => {
+        const createdAt = new Date(goal.createdAt);
+        return createdAt > fiveMinutesAgo && goal.status === 'active';
+      }).length;
+    } catch (error) {
+      console.error('Error calculating new goals count:', error);
+      return 0;
+    }
+  };
+
+  const newGoalsCount = getNewGoalsCount();
 
   // Role-based navigation items
   const getNavigationItems = (userRole) => {
@@ -41,6 +60,7 @@ function SocialCueApp({ onLogout }) {
         { id: 'home', label: 'Home', icon: Home },
         { id: 'lessons', label: 'Lessons', icon: BookOpen },
         { id: 'practice', label: 'Practice', icon: Target },
+        { id: 'goals', label: 'Goals', icon: Star },
         { id: 'progress', label: 'Progress', icon: TrendingUp },
         { id: 'settings', label: 'Settings', icon: Settings }
       ];
@@ -284,6 +304,18 @@ function SocialCueApp({ onLogout }) {
           )
         )}
         
+        {currentScreen === 'goals' && (
+          <ErrorBoundary darkMode={darkMode} onNavigate={handleNavigate}>
+            <ToastProvider darkMode={darkMode}>
+              <GoalsScreen 
+                userData={userData} 
+                darkMode={darkMode} 
+                onNavigate={handleNavigate}
+              />
+            </ToastProvider>
+          </ErrorBoundary>
+        )}
+        
         {currentScreen === 'settings' && (
           <SettingsScreen 
             userData={userData} 
@@ -321,6 +353,7 @@ function SocialCueApp({ onLogout }) {
         onNavigate={handleNavigate}
         darkMode={darkMode}
         navItems={navItems}
+        newGoalsCount={newGoalsCount}
       />
 
         <style>{`
