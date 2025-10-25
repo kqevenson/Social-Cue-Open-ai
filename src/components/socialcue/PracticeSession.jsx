@@ -13,6 +13,7 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
   const [currentSituation, setCurrentSituation] = useState(0);
   const [selectedOption, setSelectedOption] = useState(null);
   const [showFeedback, setShowFeedback] = useState(false);
+  const { showSuccess, showError } = useToast();
   const [totalPoints, setTotalPoints] = useState(0);
   const [sessionComplete, setSessionComplete] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -156,6 +157,7 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
         // Fallback to demo scenarios if AI fails
         setAiGeneratedScenario(null);
         setLessonState('ready');
+        showError('Having trouble creating scenarios. Using practice scenarios instead.');
       }
     };
 
@@ -203,6 +205,7 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
       return evaluation;
     } catch (error) {
       console.error('Error evaluating response:', error);
+      showError('Having trouble analyzing your response. Using basic feedback.');
       // Return fallback evaluation if API fails
       return {
         score: 0.5,
@@ -240,8 +243,10 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
       await addDoc(challengesRef, challenge);
 
       console.log('✅ Real-world challenge created:', challenge);
+      showSuccess('🎯 Challenge created! Check your active challenges.');
     } catch (error) {
       console.error('Error creating challenge:', error);
+      showError('Failed to create challenge. Please try again.');
     }
   };
 
@@ -527,6 +532,7 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
       // Session complete - call completePracticeSession
       setSessionComplete(true);
       playSound('complete');
+      showSuccess('🎉 Session completed! Great job!');
       
       // Calculate performance for challenge generation
       const performance = Math.round((totalPoints / (scenario.situations.length * 10)) * 100);

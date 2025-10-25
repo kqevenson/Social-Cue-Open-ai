@@ -604,11 +604,19 @@ function ProgressScreen({ userData, darkMode, onNavigate }) {
               <div className="text-center py-8">
                 <History className="w-12 h-12 mx-auto mb-3 text-gray-400" />
                 <p className={`text-lg font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  No sessions yet
+                  No practice history yet
                 </p>
                 <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Complete your first practice session to see your history here
+                  Complete your first lesson to see your progress here
                 </p>
+                <button
+                  onClick={() => onNavigate('lessons')}
+                  className={`mt-4 px-4 py-2 rounded-lg font-medium transition-colors ${
+                    darkMode ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}
+                >
+                  Start Your First Lesson
+                </button>
               </div>
             ) : (
               <div className="space-y-3">

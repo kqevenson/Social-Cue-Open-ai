@@ -92,13 +92,16 @@ const ActiveChallengesSection = ({ darkMode = false }) => {
         </div>
         
         <div className="text-center py-8">
-          <div className="text-6xl mb-4">🎯</div>
+          <Target className="w-12 h-12 mx-auto mb-3 text-gray-400" />
           <h3 className={`text-lg font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
             No Active Challenges
           </h3>
-          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-4`}>
             Complete lessons to get personalized real-world challenges!
           </p>
+          <div className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+            ✨ Challenges help you practice skills in real life
+          </div>
         </div>
       </div>
     );
