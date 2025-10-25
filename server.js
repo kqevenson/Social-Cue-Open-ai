@@ -553,9 +553,10 @@ CRITICAL: Do not use ANY workplace, business, or professional language anywhere 
 // NEW: Simplified AI lesson generation endpoint
 app.post('/api/generate-lesson-simple', async (req, res) => {
   try {
-    const { topic, gradeLevel, numScenarios } = req.body;
+    const { topic, gradeLevel, numScenarios, timestamp, requestId } = req.body;
     
     console.log(`📚 Generating AI lesson for: ${topic}, Grade: ${gradeLevel}, Scenarios: ${numScenarios || 5}`);
+    console.log(`🔄 Request ID: ${requestId}, Timestamp: ${timestamp}`);
 
     // Topic-specific examples for better scenarios
     const topicExamples = {
@@ -569,49 +570,57 @@ app.post('/api/generate-lesson-simple', async (req, res) => {
       'confidence-building': 'speaking up, trying new things, believing in yourself'
     };
 
-    const topicContext = topicExamples[topic?.toLowerCase()] || 'general social situations';
+    const topicContext = topicExamples[String(topic)?.toLowerCase()] || 'general social situations';
     const age = parseInt(gradeLevel) + 5; // Approximate age
 
-    const prompt = `You are an expert in social skills training for children. Generate ${numScenarios || 5} realistic, engaging practice scenarios for the topic: "${topic}".
+    const prompt = `You are a social skills expert. Generate ${numScenarios || 5} DIFFERENT practice scenarios for grade ${gradeLevel} students.
 
-CRITICAL REQUIREMENTS:
-- Grade level: ${gradeLevel} (age ${age})
-- Use natural, age-appropriate language kids actually use
-- Create realistic situations kids encounter daily
-- Each scenario should feel like a real conversation or situation
-- NO workplace jargon - kids don't have "colleagues" or "meetings"
-- Use names like Alex, Sam, Jordan, Casey, etc.
-- Focus on these specific aspects: ${topicContext}
+RANDOM SEED: ${topic}-${timestamp}-${Math.random()}
+REQUEST ID: ${requestId}
+TIMESTAMP: ${timestamp}
 
-For each scenario, provide:
-1. A realistic situation description (2-3 sentences)
-2. 4 response options with varying quality
-3. Specific, encouraging feedback for each option
-4. Point values (10 for best, 7 for good, 4 for okay, 2 for poor)
+Topic: ${topic}
+Grade: ${gradeLevel} (age ${age})
+Focus: ${topicContext}
 
-EXAMPLE GOOD SCENARIO:
-"You're eating lunch in the cafeteria when you notice Sam sitting alone at a table, looking down at their phone. You've seen Sam in your math class but have never really talked. Your friends are sitting at your usual table. What do you do?"
+IMPORTANT: You MUST respond with ONLY valid JSON. No explanations, no markdown, no code blocks.
 
-OPTIONS:
-A) Walk over to Sam and say, "Hey! Want to come sit with us? We have room at our table." (BEST - 10 points)
-B) Wave at Sam from your table and smile. (GOOD - 7 points)
-C) Keep eating with your friends but feel bad about Sam sitting alone. (OKAY - 4 points)
-D) Don't do anything. Sam probably wants to be alone. (POOR - 2 points)
+Create ${numScenarios || 5} COMPLETELY DIFFERENT realistic school situations. Each scenario must be unique and different from the others. Use names like Alex, Sam, Jordan, Casey, Taylor, Morgan.
 
-Generate ${numScenarios || 5} scenarios like this, varying in difficulty from easy to challenging.
+Vary the settings: cafeteria, playground, classroom, hallway, library, gym, art room, music room, bus stop, after-school club.
 
-Return ONLY valid JSON in this exact format:
+Vary the situations: meeting new people, helping someone, dealing with conflict, working together, sharing, taking turns, being inclusive.
+
+RESPOND WITH ONLY THIS EXACT JSON FORMAT (no other text):
 {
   "title": "${topic}",
   "scenarios": [
     {
-      "scenario": "situation description",
+      "scenario": "unique situation description",
       "options": [
         {
           "text": "response option",
-          "isGood": true/false,
-          "points": 10/7/4/2,
-          "feedback": "specific feedback explaining why this choice works or doesn't work"
+          "isGood": true,
+          "points": 10,
+          "feedback": "specific feedback"
+        },
+        {
+          "text": "response option",
+          "isGood": true,
+          "points": 7,
+          "feedback": "specific feedback"
+        },
+        {
+          "text": "response option",
+          "isGood": false,
+          "points": 4,
+          "feedback": "specific feedback"
+        },
+        {
+          "text": "response option",
+          "isGood": false,
+          "points": 2,
+          "feedback": "specific feedback"
         }
       ]
     }
@@ -622,7 +631,8 @@ Return ONLY valid JSON in this exact format:
     
     const message = await anthropic.messages.create({
       model: 'claude-3-haiku-20240307',
-      max_tokens: 4000,
+      max_tokens: 2000,
+      temperature: 1.0,
       messages: [
         {
           role: 'user',
@@ -663,13 +673,18 @@ Return ONLY valid JSON in this exact format:
       console.log(`✅ Successfully parsed lesson: "${lessonData.title || 'Unknown'}"`);
       console.log(`📊 Lesson contains ${lessonData.scenarios?.length || 0} practice scenarios`);
       
-      // Log scenario quality for debugging
-      if (lessonData.scenarios) {
-        console.log(`📝 Generated scenarios:`, lessonData.scenarios.map(s => ({
-          scenario: s.scenario.substring(0, 50) + '...',
-          numOptions: s.options?.length || 0
-        })));
+      // Detailed scenario logging
+      if (lessonData.scenarios && lessonData.scenarios.length > 0) {
+        console.log(`🔵 Scenarios generated: ${lessonData.scenarios.length}`);
+        console.log(`🔵 First scenario: ${lessonData.scenarios[0]?.scenario?.substring(0, 50)}...`);
+        console.log(`🔵 Last scenario: ${lessonData.scenarios[lessonData.scenarios.length - 1]?.scenario?.substring(0, 50)}...`);
+        console.log(`🔵 All scenario previews:`, lessonData.scenarios.map((s, i) => `${i + 1}. ${s.scenario?.substring(0, 30)}...`));
       }
+      
+      console.log(`📊 Generated scenarios details:`, lessonData.scenarios?.map(s => ({
+        scenario: s.scenario?.substring(0, 50) + '...',
+        optionsCount: s.options?.length || 0
+      })));
       
     } catch (parseError) {
       console.error(`❌ Failed to parse lesson JSON:`, parseError);

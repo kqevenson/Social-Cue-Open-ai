@@ -29,6 +29,18 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
   const gradeRange = getGradeRange(gradeLevel);
   const scenario = aiGeneratedScenario || scenarios[sessionId] || scenarios[1];
   const situation = scenario.situations[currentSituation];
+  
+  console.log('🔍 Current scenario:', scenario.title);
+  console.log('🔍 Scenario situations count:', scenario.situations?.length || 0);
+  console.log('🔍 Current situation index:', currentSituation);
+  console.log('🔍 Current situation object:', situation);
+  console.log('🔍 Current situation context:', situation?.context);
+  console.log('🔍 Context type:', typeof situation?.context);
+  
+  // Navigation debugging
+  console.log('🔵 Can go to next?', scenario.situations?.length > 0 && currentSituation < scenario.situations.length - 1);
+  console.log('🔵 Can go back?', currentSituation > 0);
+  console.log('🔵 Progress:', `${currentSituation + 1}/${scenario.situations?.length || 0}`);
 
   // Shuffle function to randomize answer positions
   const shuffleArray = (array) => {
@@ -81,7 +93,9 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
           body: JSON.stringify({
             topic: sessionId, // or get topic name from props
             gradeLevel: gradeLevel || '5',
-            numScenarios: 5
+            numScenarios: 5,
+            timestamp: Date.now(), // Force new scenarios each time
+            requestId: `${sessionId}-${Date.now()}-${Math.random()}`
           })
         });
 
@@ -91,6 +105,16 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
 
         const data = await response.json();
         console.log('✅ AI scenarios generated:', data);
+        console.log('📊 Scenarios received:', data.scenarios?.length || 0);
+        console.log('📊 Full scenarios data:', data.scenarios);
+        
+        // Detailed frontend logging
+        console.log('🔵 Scenarios received from API:', data.scenarios?.length || 0);
+        if (data.scenarios && data.scenarios.length > 0) {
+          console.log('🔵 All scenarios:', data.scenarios.map(s => s.scenario?.substring(0, 30) + '...'));
+          console.log('🔵 First scenario full:', data.scenarios[0]);
+          console.log('🔵 Last scenario full:', data.scenarios[data.scenarios.length - 1]);
+        }
         
         // Transform the API response to match our scenario format
         const transformedScenario = {
@@ -98,7 +122,7 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
           title: data.title || sessionId.replace(/-/g, ' '),
           situations: data.scenarios?.map((scenario, index) => ({
             id: index + 1,
-            context: scenario.scenario,
+            context: scenario.scenario, // API returns 'scenario', frontend expects 'context'
             prompt: "What should you do?",
             options: scenario.options?.map(option => ({
               text: option.text,
@@ -112,7 +136,15 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
           aiGenerated: true
         };
         
+        console.log('🔄 Transformed scenarios count:', transformedScenario.situations.length);
+        console.log('🔄 Transformed scenarios:', transformedScenario.situations);
+        
+        // Detailed transformation logging
+        console.log('🔵 After transformation - all situations:', transformedScenario.situations.map((s, i) => `${i + 1}. ${s.context?.substring(0, 30)}...`));
+        console.log('🔵 Transformation preserved all scenarios:', transformedScenario.situations.length === (data.scenarios?.length || 0));
+        
         setAiGeneratedScenario(transformedScenario);
+        setCurrentSituation(0); // Reset to first scenario when new scenarios are loaded
         console.log('🔍 SCENARIO SOURCE:', 'AI Generated');
         setLessonState('ready');
       } catch (error) {
@@ -479,7 +511,12 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
     stopSpeaking();
     playSound('click');
     
-    if (currentSituation < scenario.situations.length - 1) {
+    console.log('🔵 handleNext called - currentSituation:', currentSituation);
+    console.log('🔵 Total situations:', scenario.situations?.length || 0);
+    console.log('🔵 Can advance?', scenario.situations?.length > 0 && currentSituation < scenario.situations.length - 1);
+    
+    if (scenario.situations?.length > 0 && currentSituation < scenario.situations.length - 1) {
+      console.log('🔵 Advancing to next situation:', currentSituation + 1);
       setCurrentSituation(prev => prev + 1);
       setSelectedOption(null);
       setShowFeedback(false);
@@ -535,11 +572,11 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
     setSessionComplete(false);
   };
 
-  const progressPercentage = ((currentSituation + 1) / scenario.situations.length) * 100;
-  const finalScore = Math.round((totalPoints / (scenario.situations.length * 10)) * 100);
+  const progressPercentage = scenario.situations?.length > 0 ? ((currentSituation + 1) / scenario.situations.length) * 100 : 0;
+  const finalScore = scenario.situations?.length > 0 ? Math.round((totalPoints / (scenario.situations.length * 10)) * 100) : 0;
   const scenarioTitle = getContent(scenario.title);
-  const situationContext = getContent(situation.context);
-  const situationPrompt = getContent(situation.prompt);
+  const situationContext = getContent(situation?.context || '');
+  const situationPrompt = getContent(situation?.prompt || '');
 
   // Loading state while AI generates scenarios
   if (lessonState === 'loading') {
@@ -826,7 +863,7 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
             </div>
           </div>
           <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Situation {currentSituation + 1} of {scenario.situations.length}
+            Situation {currentSituation + 1} of {scenario.situations?.length || 0}
           </div>
         </div>
 
@@ -996,7 +1033,7 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
               </button>
             )}
             <button onClick={handleNext} className={`${currentSituation > 0 ? 'flex-1' : 'w-full'} bg-gradient-to-r from-blue-500 to-emerald-400 text-white font-bold py-4 px-6 rounded-full hover:shadow-lg hover:shadow-blue-500/50 transition-all flex items-center justify-center gap-2`}>
-              {currentSituation < scenario.situations.length - 1 ? 'Next Situation' : 'Complete'}
+              {scenario.situations?.length > 0 && currentSituation < scenario.situations.length - 1 ? 'Next Situation' : 'Complete'}
               <ArrowRight className="w-5 h-5" />
             </button>
           </div>
