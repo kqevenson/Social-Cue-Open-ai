@@ -257,6 +257,82 @@ export const challengeService = {
       console.error('❌ Error updating days remaining:', error);
       return [];
     }
+  },
+
+  // Fetch active challenges from backend API
+  async fetchActiveChallenges(userId) {
+    try {
+      console.log('🎯 Fetching active challenges for user:', userId);
+
+      const response = await fetch(`${API_BASE_URL}/adaptive/active-challenges/${userId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.log('📭 No active challenges found');
+          return [];
+        }
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to fetch active challenges');
+      }
+
+      console.log('✅ Active challenges fetched successfully:', data.challenges.length);
+      return data.challenges || [];
+    } catch (error) {
+      console.error('❌ Error fetching active challenges:', error);
+      
+      // Fallback to localStorage if API fails
+      console.log('🔄 Falling back to localStorage challenges');
+      return this.getActiveChallenges(userId);
+    }
+  },
+
+  // Complete challenge via backend API
+  async completeChallengeAPI(challengeId, userId, notes = '') {
+    try {
+      console.log('🎉 Completing challenge via API:', challengeId);
+
+      const response = await fetch(`${API_BASE_URL}/adaptive/complete-challenge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          challengeId: challengeId,
+          learnerId: userId,
+          notes: notes,
+          pointsAwarded: 50
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to complete challenge');
+      }
+
+      console.log('✅ Challenge completed successfully via API');
+      return data;
+    } catch (error) {
+      console.error('❌ Error completing challenge via API:', error);
+      
+      // Fallback to localStorage completion
+      console.log('🔄 Falling back to localStorage completion');
+      return this.completeChallenge(challengeId, userId);
+    }
   }
 };
 
