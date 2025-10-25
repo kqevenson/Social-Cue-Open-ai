@@ -1,136 +1,79 @@
-import React from 'react';
-import { CheckCircle, Clock, AlertTriangle, Info } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { CheckCircle, XCircle, AlertCircle, X } from 'lucide-react';
 
 const ToastNotification = ({ 
   message, 
-  type = 'info', 
-  onClose, 
-  duration = 5000,
-  show = true,
-  action = null
+  type = 'success', 
+  duration = 3000, 
+  onClose,
+  darkMode = false 
 }) => {
-  const [isVisible, setIsVisible] = React.useState(show);
+  const [isVisible, setIsVisible] = useState(true);
 
-  React.useEffect(() => {
-    if (show) {
-      setIsVisible(true);
-      
-      if (duration > 0) {
-        const timer = setTimeout(() => {
-          setIsVisible(false);
-          setTimeout(() => onClose?.(), 300);
-        }, duration);
-        
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [show, duration, onClose]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(false);
+      setTimeout(() => onClose?.(), 300); // Wait for animation to complete
+    }, duration);
 
-  if (!isVisible) return null;
+    return () => clearTimeout(timer);
+  }, [duration, onClose]);
 
-  const getConfig = () => {
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(() => onClose?.(), 300);
+  };
+
+  const getIcon = () => {
     switch (type) {
       case 'success':
-        return {
-          icon: <CheckCircle className="w-5 h-5 text-emerald-400" />,
-          bgColor: 'bg-emerald-500/90',
-          borderColor: 'border-emerald-400/30',
-          title: 'Success!'
-        };
-      case 'warning':
-        return {
-          icon: <AlertTriangle className="w-5 h-5 text-yellow-400" />,
-          bgColor: 'bg-yellow-500/90',
-          borderColor: 'border-yellow-400/30',
-          title: 'Warning'
-        };
+        return <CheckCircle className="w-5 h-5 text-green-500" />;
       case 'error':
-        return {
-          icon: <AlertTriangle className="w-5 h-5 text-red-400" />,
-          bgColor: 'bg-red-500/90',
-          borderColor: 'border-red-400/30',
-          title: 'Error'
-        };
-      case 'info':
+        return <XCircle className="w-5 h-5 text-red-500" />;
+      case 'warning':
+        return <AlertCircle className="w-5 h-5 text-yellow-500" />;
       default:
-        return {
-          icon: <Info className="w-5 h-5 text-blue-400" />,
-          bgColor: 'bg-blue-500/90',
-          borderColor: 'border-blue-400/30',
-          title: 'Info'
-        };
+        return <CheckCircle className="w-5 h-5 text-green-500" />;
     }
   };
 
-  const config = getConfig();
+  const getBgColor = () => {
+    switch (type) {
+      case 'success':
+        return darkMode ? 'bg-green-500/20 border-green-500/30' : 'bg-green-50 border-green-200';
+      case 'error':
+        return darkMode ? 'bg-red-500/20 border-red-500/30' : 'bg-red-50 border-red-200';
+      case 'warning':
+        return darkMode ? 'bg-yellow-500/20 border-yellow-500/30' : 'bg-yellow-50 border-yellow-200';
+      default:
+        return darkMode ? 'bg-green-500/20 border-green-500/30' : 'bg-green-50 border-green-200';
+    }
+  };
+
+  const getTextColor = () => {
+    return darkMode ? 'text-white' : 'text-gray-900';
+  };
 
   return (
-    <div className={`fixed bottom-4 right-4 ${config.bgColor} backdrop-blur border ${config.borderColor} text-white p-4 rounded-xl shadow-2xl flex items-start gap-3 animate-slideUp z-50 max-w-sm`}>
-      {config.icon}
-      <div className="flex-1">
-        <p className="font-bold text-sm">{config.title}</p>
-        <p className="text-sm opacity-90">{message}</p>
-        {action && (
-          <div className="mt-2">
-            {action}
-          </div>
-        )}
+    <div
+      className={`fixed top-4 right-4 z-50 transform transition-all duration-300 ease-in-out ${
+        isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
+      }`}
+    >
+      <div className={`backdrop-blur-xl border rounded-xl p-4 shadow-lg ${getBgColor()}`}>
+        <div className="flex items-center gap-3">
+          {getIcon()}
+          <p className={`font-medium ${getTextColor()}`}>{message}</p>
+          <button
+            onClick={handleClose}
+            className={`ml-2 p-1 rounded-full hover:bg-black/10 transition-colors ${getTextColor()}`}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
-      <button 
-        onClick={() => {
-          setIsVisible(false);
-          setTimeout(() => onClose?.(), 300);
-        }} 
-        className="text-white/80 hover:text-white transition-colors"
-      >
-        ×
-      </button>
     </div>
   );
 };
 
-const SuccessToast = ({ message, onClose, duration = 3000 }) => (
-  <ToastNotification 
-    message={message} 
-    type="success" 
-    onClose={onClose} 
-    duration={duration}
-  />
-);
-
-const ErrorToast = ({ message, onClose, duration = 7000, action }) => (
-  <ToastNotification 
-    message={message} 
-    type="error" 
-    onClose={onClose} 
-    duration={duration}
-    action={action}
-  />
-);
-
-const WarningToast = ({ message, onClose, duration = 5000 }) => (
-  <ToastNotification 
-    message={message} 
-    type="warning" 
-    onClose={onClose} 
-    duration={duration}
-  />
-);
-
-const InfoToast = ({ message, onClose, duration = 4000 }) => (
-  <ToastNotification 
-    message={message} 
-    type="info" 
-    onClose={onClose} 
-    duration={duration}
-  />
-);
-
-export { 
-  ToastNotification, 
-  SuccessToast, 
-  ErrorToast, 
-  WarningToast, 
-  InfoToast 
-};
 export default ToastNotification;

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Home, Target, TrendingUp, Settings, BookOpen, User, BarChart3 } from 'lucide-react';
 import { getUserData, saveUserData } from './socialcue/utils/storage';
 import { lessonApiService } from '../services/lessonApi';
+import { ToastProvider } from './socialcue/animations';
 import HomeScreen from './socialcue/HomeScreen';
 import PracticeScreen from './socialcue/PracticeScreen';
 import ProgressScreen from './socialcue/ProgressScreen';
@@ -192,7 +193,8 @@ function SocialCueApp({ onLogout }) {
   if (!userData) return null;
 
   return (
-    <div className={`min-h-screen ${darkMode ? 'bg-black text-white' : 'bg-gray-50 text-gray-900'}`}>
+    <ToastProvider darkMode={darkMode}>
+      <div className={`min-h-screen ${darkMode ? 'bg-black text-white' : 'bg-gray-50 text-gray-900'}`}>
       <div className="overflow-y-auto" style={{ height: 'calc(100vh - 80px)' }}>
         {/* Home screen - different for parents vs learners */}
         {currentScreen === 'home' && (
@@ -314,12 +316,13 @@ function SocialCueApp({ onLogout }) {
         navItems={navItems}
       />
 
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar { height: 8px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 4px; }
-      `}</style>
-    </div>
+        <style>{`
+          .custom-scrollbar::-webkit-scrollbar { height: 8px; }
+          .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 4px; }
+          .custom-scrollbar::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 4px; }
+        `}</style>
+      </div>
+    </ToastProvider>
   );
 }
 

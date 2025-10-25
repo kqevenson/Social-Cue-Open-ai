@@ -6,6 +6,7 @@ import scenarios from './utils/scenarios';
 import SuccessAnimation from './animations/SuccessAnimation';
 import LoadingSpinner from './animations/LoadingSpinner';
 import SessionResults from './SessionResults';
+import { useToast } from './animations';
 import { getFirestore, doc, updateDoc, collection, addDoc } from 'firebase/firestore';
 
 function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEffects, autoReadText }) {
@@ -601,16 +602,31 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
               </div>
               
               <div className="flex justify-center mb-6">
-                <LoadingSpinner size="large" />
+                <LoadingSpinner 
+                  size="large" 
+                  variant="icon" 
+                  text="Creating your practice session..." 
+                  darkMode={darkMode}
+                />
               </div>
               
-              <div className="space-y-2">
+              <div className="space-y-3">
+                <div className="flex items-center justify-center gap-2">
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  </div>
+                </div>
                 <p className={`text-lg font-medium ${darkMode ? 'text-blue-300' : 'text-blue-600'}`}>
                   Creating 5 unique scenarios...
                 </p>
                 <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   This usually takes 8-12 seconds
                 </p>
+                <div className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'} mt-2`}>
+                  ✨ Each scenario is tailored to your learning level
+                </div>
               </div>
             </div>
           </div>
@@ -639,10 +655,22 @@ function PracticeSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
 
               {isCompletingSession ? (
                 <div className="mb-8">
-                  <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                  <p className={`text-lg ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    Analyzing your performance...
-                  </p>
+                  <div className="flex justify-center mb-4">
+                    <LoadingSpinner 
+                      size="md" 
+                      variant="icon" 
+                      text="Analyzing your performance..." 
+                      darkMode={darkMode}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <p className={`text-lg font-medium ${darkMode ? 'text-blue-300' : 'text-blue-600'}`}>
+                      Calculating your progress...
+                    </p>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Generating personalized feedback
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <div className="mb-8">
