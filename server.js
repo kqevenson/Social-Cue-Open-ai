@@ -583,12 +583,129 @@ Focus: ${topicContext}
 Create 5 unique school situations. Use names: Alex, Sam, Jordan, Casey, Taylor, Morgan.
 Settings: cafeteria, playground, classroom, hallway, library, gym, art room, bus stop.
 
-RESPOND WITH ONLY THIS EXACT JSON FORMAT (no other text):
+IMPORTANT: You MUST respond with ONLY valid JSON. No explanations, no markdown, no code blocks.
+
 {
   "title": "${topic}",
   "scenarios": [
     {
       "scenario": "situation description",
+      "options": [
+        {
+          "text": "response option",
+          "isGood": true,
+          "points": 10,
+          "feedback": "feedback"
+        },
+        {
+          "text": "response option", 
+          "isGood": false,
+          "points": 0,
+          "feedback": "feedback"
+        },
+        {
+          "text": "response option",
+          "isGood": false, 
+          "points": 0,
+          "feedback": "feedback"
+        },
+        {
+          "text": "response option",
+          "isGood": false,
+          "points": 0,
+          "feedback": "feedback"
+        }
+      ]
+    },
+    {
+      "scenario": "another situation",
+      "options": [
+        {
+          "text": "response option",
+          "isGood": true,
+          "points": 10,
+          "feedback": "feedback"
+        },
+        {
+          "text": "response option", 
+          "isGood": false,
+          "points": 0,
+          "feedback": "feedback"
+        },
+        {
+          "text": "response option",
+          "isGood": false, 
+          "points": 0,
+          "feedback": "feedback"
+        },
+        {
+          "text": "response option",
+          "isGood": false,
+          "points": 0,
+          "feedback": "feedback"
+        }
+      ]
+    },
+    {
+      "scenario": "third situation",
+      "options": [
+        {
+          "text": "response option",
+          "isGood": true,
+          "points": 10,
+          "feedback": "feedback"
+        },
+        {
+          "text": "response option", 
+          "isGood": false,
+          "points": 0,
+          "feedback": "feedback"
+        },
+        {
+          "text": "response option",
+          "isGood": false, 
+          "points": 0,
+          "feedback": "feedback"
+        },
+        {
+          "text": "response option",
+          "isGood": false,
+          "points": 0,
+          "feedback": "feedback"
+        }
+      ]
+    },
+    {
+      "scenario": "fourth situation",
+      "options": [
+        {
+          "text": "response option",
+          "isGood": true,
+          "points": 10,
+          "feedback": "feedback"
+        },
+        {
+          "text": "response option", 
+          "isGood": false,
+          "points": 0,
+          "feedback": "feedback"
+        },
+        {
+          "text": "response option",
+          "isGood": false, 
+          "points": 0,
+          "feedback": "feedback"
+        },
+        {
+          "text": "response option",
+          "isGood": false,
+          "points": 0,
+          "feedback": "feedback"
+        }
+      ]
+    },
+    {
+      "scenario": "fifth situation",
       "options": [
         {
           "text": "response option",
@@ -624,7 +741,7 @@ RESPOND WITH ONLY THIS EXACT JSON FORMAT (no other text):
     
     const message = await anthropic.messages.create({
       model: 'claude-3-haiku-20240307',
-      max_tokens: 1000, // Further reduced for faster generation
+      max_tokens: 2000, // Increased to handle full 5 scenarios
       temperature: 0.7, // Reduced from 0.9 for faster generation
       messages: [
         {
@@ -662,6 +779,8 @@ RESPOND WITH ONLY THIS EXACT JSON FORMAT (no other text):
                        responseText.match(/\{[\s\S]*\}/);
       
       if (!jsonMatch) {
+        console.error('❌ No JSON found in response');
+        console.error('Raw response:', responseText.substring(0, 500));
         throw new Error('No JSON found in response');
       }
       
