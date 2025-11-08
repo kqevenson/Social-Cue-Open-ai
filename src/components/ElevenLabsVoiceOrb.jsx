@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Volume2, Mic, Loader } from 'lucide-react';
 import CleanVoiceService from '../services/CleanVoiceService';
 import { textToSpeechElevenLabs } from '../services/elevenLabsService';
-import contentService from '../services/contentService';
 
 const ElevenLabsVoiceOrb = ({
   scenario,
@@ -27,6 +26,8 @@ const ElevenLabsVoiceOrb = ({
   const hasSpokenIntroRef = useRef(false);
   const currentAudioRef = useRef(null);
   const recognitionActiveRef = useRef(false);
+  const finalTranscriptRef = useRef('');
+  const silenceTimerRef = useRef(null);
 
   // Initialize once on mount
   useEffect(() => {
@@ -49,86 +50,146 @@ const ElevenLabsVoiceOrb = ({
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
     }
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+    }
   };
 
   const initializeSpeechRecognition = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
-
-    recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.continuous = true;
-    recognitionRef.current.interimResults = true;
-    recognitionRef.current.maxAlternatives = 1;
-    recognitionRef.current.lang = 'en-US';
-
-    let silenceTimer;
-
-    recognitionRef.current.onstart = () => {
-      recognitionActiveRef.current = true;
-      setIsListening(true);
-      console.log('✅ Mic started');
-    };
-
-    recognitionRef.current.onresult = (event) => {
-      clearTimeout(silenceTimer);
-
-      const transcript = Array.from(event.results)
-        .map((result) => result[0])
-        .map((result) => result.transcript)
-        .join('');
-
-      console.log('🎤 Hearing:', transcript);
-
-      if (transcript.trim()) {
-        setTranscript(transcript);
-
-        if (event.results[event.results.length - 1].isFinal) {
-          stopListening();
-          handleUserMessage(transcript);
-        }
-
-        silenceTimer = setTimeout(() => {
-          console.log('✅ Finished - detected silence');
-          stopListening();
-          handleUserMessage(transcript);
-        }, 1500);
-      }
-    };
-
-    recognitionRef.current.onend = () => {
-      clearTimeout(silenceTimer);
-      recognitionActiveRef.current = false;
-      setIsListening(false);
-      console.log('🔴 Mic stopped');
-    };
-  };
-
-  const startListening = useCallback(() => {
-    if (!recognitionRef.current || isSpeaking || isThinking || recognitionActiveRef.current) {
+    if (!SpeechRecognition) {
+      console.error('Speech recognition not supported');
       return;
     }
 
-    try {
-      navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then(() => {
-          console.log('✅ Mic permission granted');
-          recognitionRef.current.start();
-          console.log('👂 Starting mic...');
-        })
-        .catch((err) => {
-          console.error('❌ Mic permission denied:', err);
-        });
-    } catch (err) {
-      console.error('Mic error:', err);
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      console.log('🎤 Mic started - listening...');
+      recognitionActiveRef.current = true;
+      setIsListening(true);
+      finalTranscriptRef.current = '';
+    };
+
+    recognition.onresult = (event) => {
+      console.log('🎤 Got speech result');
+      
+      let interimTranscript = '';
+      
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcriptPiece = event.results[i][0].transcript;
+        
+        if (event.results[i].isFinal) {
+          finalTranscriptRef.current += transcriptPiece + ' ';
+          console.log('✅ Final transcript so far:', finalTranscriptRef.current);
+        } else {
+          interimTranscript += transcriptPiece;
+          console.log('⏳ Interim:', interimTranscript);
+        }
+      }
+      
+      // Show live transcript
+      const displayText = finalTranscriptRef.current + interimTranscript;
+      setTranscript(displayText.trim());
+      
+      // Reset silence timer on each result
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+      
+      // Stop after 3 seconds of silence
+      silenceTimerRef.current = setTimeout(() => {
+        console.log('⏱️ 3 seconds of silence detected - stopping');
+        if (recognitionRef.current && recognitionActiveRef.current) {
+          recognitionRef.current.stop();
+        }
+      }, 3000);
+    };
+
+    recognition.onerror = (event) => {
+      console.error('❌ Recognition error:', event.error);
+      
+      // Don't stop on "no-speech" error
+      if (event.error === 'no-speech') {
+        console.log('ℹ️ No speech detected, but keeping mic open');
+        return;
+      }
+      
+      recognitionActiveRef.current = false;
+      setIsListening(false);
+      
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+    };
+
+    recognition.onend = () => {
+      console.log('🛑 Recognition ended');
+      recognitionActiveRef.current = false;
+      setIsListening(false);
+      
+      // Clear silence timer
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+      
+      // Send the final transcript
+      const finalText = finalTranscriptRef.current.trim();
+      if (finalText) {
+        console.log('📤 Sending transcript:', finalText);
+        handleUserMessage(finalText);
+      }
+      
+      finalTranscriptRef.current = '';
+      setTranscript('');
+    };
+
+    recognitionRef.current = recognition;
+  };
+
+  const startListening = useCallback(() => {
+    if (!recognitionRef.current || recognitionActiveRef.current || isSpeaking || isThinking) {
+      console.log('❌ Cannot start - already active or busy');
+      return;
     }
+
+    finalTranscriptRef.current = '';
+    setTranscript('');
+
+    navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then(() => {
+        console.log('✅ Mic permission granted');
+        try {
+          recognitionRef.current.start();
+          console.log('🎤 Started listening - speak now!');
+        } catch (err) {
+          console.error('❌ Mic start error:', err);
+          recognitionActiveRef.current = false;
+          setIsListening(false);
+        }
+      })
+      .catch((err) => {
+        console.error('❌ Mic permission denied:', err);
+      });
   }, [isSpeaking, isThinking]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current && recognitionActiveRef.current) {
       try {
         recognitionRef.current.stop();
-      } catch (e) {}
+      } catch (e) {
+        console.error('Error stopping:', e);
+      }
+    }
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
     }
   }, []);
 
@@ -162,7 +223,7 @@ const ElevenLabsVoiceOrb = ({
           if (currentPhase !== 'complete') {
             startListening();
           }
-        }, 300);
+        }, 500);
       };
 
       await audio.play();
@@ -230,7 +291,6 @@ const ElevenLabsVoiceOrb = ({
         
         if (newIntroCount >= 2) {
           console.log('🚀 TRANSITIONING: intro → practice');
-          console.log('✅ Curriculum intro complete! Now entering practice mode.');
           
           phaseToUse = 'practice';
           role = scenario?.aiRole || 'friend';
@@ -240,29 +300,12 @@ const ElevenLabsVoiceOrb = ({
           setIsInCharacterMode(true);
           setCharacterRole(role);
           setCharacterExchangeCount(0);
-          
-          console.log('✅ NOW IN PRACTICE MODE');
-          console.log('✅ CHARACTER MODE ACTIVE:', role);
-        } else {
-          console.log('📖 Still in INTRO phase - using curriculum');
-          phaseToUse = 'intro';
-          characterModeActive = false;
-          role = null;
         }
       }
 
       if (phaseToUse === 'practice' && characterModeActive) {
-        setCharacterExchangeCount(prev => {
-          const newCount = prev + 1;
-          console.log('💬 Practice exchange count:', newCount);
-          return newCount;
-        });
+        setCharacterExchangeCount(prev => prev + 1);
       }
-
-      console.log('🤖 Calling AI with:');
-      console.log('   Phase:', phaseToUse);
-      console.log('   Character mode:', characterModeActive);
-      console.log('   Role:', role);
 
       const aiData = await CleanVoiceService.generateResponse({
         conversationHistory: updatedMessages,
@@ -284,7 +327,6 @@ const ElevenLabsVoiceOrb = ({
       setMessages(prev => [...prev, { role: 'assistant', content: textToSpeak }]);
       
       if (aiData.phase && aiData.phase !== phaseToUse) {
-        console.log('🔄 AI suggests:', phaseToUse, '→', aiData.phase);
         setCurrentPhase(aiData.phase);
 
         if (aiData.phase === 'feedback' || aiData.phase === 'complete') {
@@ -386,7 +428,7 @@ const ElevenLabsVoiceOrb = ({
           )}
           {transcript && (
             <div className="animate-fadeIn">
-              <p className="text-xs text-blue-400 uppercase tracking-wide mb-1">You said</p>
+              <p className="text-xs text-blue-400 uppercase tracking-wide mb-1">You're saying...</p>
               <p className="text-base text-blue-400">{transcript}</p>
             </div>
           )}
@@ -403,7 +445,7 @@ const ElevenLabsVoiceOrb = ({
                isInCharacterMode ? `${characterRole} speaking...` : 
                'AI Coach speaking...'
              }</span> :
-             isListening ? <span className="text-emerald-400">👂 Listening...</span> :
+             isListening ? <span className="text-emerald-400">👂 Listening... (speak and pause when done)</span> :
              <span>⏳ Starting...</span>}
           </p>
         </div>
