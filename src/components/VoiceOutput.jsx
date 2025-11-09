@@ -1,43 +1,51 @@
-import React, { useEffect } from 'react';
-import { useVoice } from '../hooks/useVoiceConversation';
-import { generateVoicePrompt } from '../services/CleanVoiceService';
+import React, { useEffect, useState } from 'react';
+import CleanVoiceService from '../services/CleanVoiceService';
+import ElevenLabsVoiceOrb from './ElevenLabsVoiceOrb';
 
-const VoiceOutput = ({
-  response,
-  mode = 'coach', // 'coach', 'peer', 'feedback'
-  gradeLevel = '6-8',
-  persona = '', // optional: 'shy', 'confident', etc.
-}) => {
-  const { speak } = useVoice();
+const VoiceOutput = ({ conversationHistory = [], lesson = null, gradeLevel = '6', mode = null }) => {
+  const [aiResponse, setAiResponse] = useState('');
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const speakResponse = async () => {
-      if (!response) return;
-
+    const getAIResponse = async () => {
       try {
-        const voicePrompt = await generateVoicePrompt({
-          transcript: response,
-          phase: mode,
+        const response = await CleanVoiceService.generateResponse({
+          conversationHistory,
           gradeLevel,
-          persona,
+          scenario: lesson,
+          mode
         });
-
-        // Truncate to ~200 characters to avoid ElevenLabs errors
-        const safePrompt = voicePrompt?.slice(0, 200);
-
-        speak(`Speaking: ${safePrompt}`);
-      } catch (error) {
-        console.error('❌ Failed to generate voice prompt:', error);
-
-        // Fallback to direct transcript
-        speak(`Speaking: ${response.slice(0, 200)}`);
+        setAiResponse(response.aiResponse);
+        setIsSpeaking(true);
+      } catch (err) {
+        console.error('AI error:', err);
+        setError('There was a problem generating a response.');
       }
     };
 
-    speakResponse();
-  }, [response, mode, gradeLevel, persona, speak]);
+    getAIResponse();
+  }, [conversationHistory, lesson, gradeLevel, mode]);
 
-  return null;
+  const handleSpeechEnd = () => {
+    setIsSpeaking(false);
+  };
+
+  return (
+    <div className="voice-output">
+      {error && <p className="error">{error}</p>}
+      {aiResponse && (
+        <>
+          <p className="ai-response-text">{aiResponse}</p>
+          <ElevenLabsVoiceOrb
+            text={aiResponse}
+            onEnd={handleSpeechEnd}
+            isSpeaking={isSpeaking}
+          />
+        </>
+      )}
+    </div>
+  );
 };
 
 export default VoiceOutput;

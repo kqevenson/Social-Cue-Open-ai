@@ -4,12 +4,12 @@ import { getUserData, saveUserData } from './socialcue/utils/storage';
 import { lessonApiService } from '../services/lessonApi';
 import { ToastProvider, ErrorBoundary } from './socialcue/animations';
 import HomeScreen from './socialcue/HomeScreen';
-import PracticeScreen from './socialcue/PracticeScreen';
+import PracticeScreen from "./socialcue/PracticeScreen";
+
 import ProgressScreen from './socialcue/ProgressScreen';
 import SettingsScreen from './socialcue/SettingsScreen';
 import ParentDashboard from './socialcue/ParentDashboard';
 import ParentChildOverview from './socialcue/ParentChildOverview';
-import PracticeSession from './socialcue/PracticeSession';
 import AILessonSession from './socialcue/AILessonSession';
 import AIPracticeSession from './AIPracticeSession';
 import LessonsScreen from './socialcue/LessonsScreen';
@@ -26,6 +26,7 @@ function SocialCueApp({ onLogout }) {
   const [notifications, setNotifications] = useState(true);
   const [sessionId, setSessionId] = useState(1);
   const [selectedChildId, setSelectedChildId] = useState(null);
+  const [activeScreen, setActiveScreen] = useState('practice');
   
   // Calculate new goals count (goals created in the last 5 minutes)
   const getNewGoalsCount = () => {
@@ -179,14 +180,24 @@ function SocialCueApp({ onLogout }) {
   };
 
   const handleNavigate = (screen, sid) => {
-    console.log('🧭 Navigating to:', screen, sid ? `with sessionId: ${sid}` : '');
+    console.log('🧭 Navigating to:', screen, sid ? `with sessionId: ${sid}` : '(no sessionId provided)');
     setCurrentScreen(screen);
-    if (sid) {
-      setSessionId(sid);
-      // Set topicName based on sessionId
+    if (screen === 'practiceHome') {
+      setActiveScreen('practice');
+    }
+
+    let nextSessionId = sid;
+    if (screen === 'practice' && (!nextSessionId || Number.isNaN(Number(nextSessionId)))) {
+      console.log('⚠️ No sessionId provided, defaulting to 1');
+      nextSessionId = 1;
+    }
+
+    if (nextSessionId) {
+      const numericSessionId = Number(nextSessionId);
+      setSessionId(numericSessionId);
       const topicMap = {
         1: 'Small Talk Basics',
-        2: 'Active Listening', 
+        2: 'Active Listening',
         3: 'Reading Body Language',
         4: 'Building Confidence',
         5: 'Conflict Resolution',
@@ -194,15 +205,13 @@ function SocialCueApp({ onLogout }) {
         7: 'Empathy',
         8: 'Assertiveness'
       };
-      const topicName = topicMap[sid] || 'Social Skills';
-      
-      // Update user data with topicName
+      const topicName = topicMap[numericSessionId] || 'Social Skills';
+
       const currentData = getUserData();
       const updatedData = { ...currentData, topicName };
       saveUserData(updatedData);
       setUserData(updatedData);
     } else {
-      // Reload user data when navigating (but preserve topicName if it exists)
       const data = getUserData();
       setUserData(data);
     }
@@ -246,47 +255,54 @@ function SocialCueApp({ onLogout }) {
         )}
         
         {/* Practice Session - only for learners */}
-        {currentScreen === 'practice' && sessionId && userData?.role !== 'parent' && (
-          <ErrorBoundary darkMode={darkMode} onNavigate={handleNavigate}>
-            <PracticeSession 
-              sessionId={sessionId} 
-              onNavigate={handleNavigate}
-              onComplete={(data) => {
-                console.log('Session completed!', data);
-                handleNavigate('progress');
-                setSessionId(null);
-              }}
-              onExit={() => {
-                console.log('Session exited');
-                handleNavigate('home');
-                setSessionId(null);
-              }}
-              darkMode={darkMode} 
-              gradeLevel={userData.grade || "5"} 
-              soundEffects={soundEffects}
-              autoReadText={autoReadText}
-              topicName={userData.topicName}
-            />
-          </ErrorBoundary>
+        {currentScreen === 'practice' && userData?.role !== 'parent' && (
+          sessionId ? (
+            <ErrorBoundary darkMode={darkMode} onNavigate={handleNavigate}>
+              <AIPracticeSession
+                sessionId={sessionId}
+                onNavigate={handleNavigate}
+                onComplete={(data) => {
+                  console.log('Session completed!', data);
+                  handleNavigate('progress');
+                  setSessionId(null);
+                }}
+                onExit={() => {
+                  console.log('Session exited');
+                  handleNavigate('home');
+                  setSessionId(null);
+                }}
+                darkMode={darkMode}
+                gradeLevel={userData.grade || '5'}
+                soundEffects={soundEffects}
+                autoReadText={autoReadText}
+                topicName={userData.topicName}
+              />
+            </ErrorBoundary>
+          ) : (
+            <div className="min-h-[50vh] flex items-center justify-center text-center text-gray-400">
+              No session selected. Please choose a practice session from the Practice screen.
+            </div>
+          )
         )}
         
         {/* Practice Home - only for learners */}
         {currentScreen === 'practiceHome' && userData?.role !== 'parent' && (
-          <PracticeScreen 
-            onNavigate={handleNavigate} 
-            darkMode={darkMode} 
-          />
+          activeScreen === 'voicePractice' ? (
+            <AIPracticeSession
+              category="Voice Practice"
+              gradeLevel={userData.gradeLevel || userData.grade || '6-8'}
+              onComplete={() => setActiveScreen('practice')}
+              onBack={() => setActiveScreen('practice')}
+            />
+          ) : (
+            <PracticeScreen
+              onNavigate={handleNavigate}
+              darkMode={darkMode}
+              setActiveScreen={setActiveScreen}
+            />
+          )
         )}
         
-        {currentScreen === 'ai-practice' && (
-          <AIPracticeSession 
-            category="AI Practice" 
-            gradeLevel={userData.gradeLevel || "6-8"} 
-            onComplete={() => handleNavigate('home')}
-          />
-        )}
-        
-        {/* Progress - different for parents vs learners */}
         {currentScreen === 'progress' && (
           userData?.role === 'parent' ? (
             <ParentDashboard 

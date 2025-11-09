@@ -33,15 +33,19 @@ const ElevenLabsVoiceOrb = ({
   useEffect(() => {
     initializeSpeechRecognition();
 
-    setTimeout(() => {
+    const introDelay = (CleanVoiceService.getTimingForGrade(gradeLevel) || {}).initialWait || 2000;
+    const introTimeout = setTimeout(() => {
       if (!hasSpokenIntroRef.current) {
         speakIntro();
         hasSpokenIntroRef.current = true;
       }
-    }, 800);
+    }, introDelay);
 
-    return cleanup;
-  }, []);
+    return () => {
+      clearTimeout(introTimeout);
+      cleanup();
+    };
+  }, [gradeLevel]);
 
   const cleanup = () => {
     if (recognitionRef.current) {
@@ -286,16 +290,16 @@ const ElevenLabsVoiceOrb = ({
       if (currentPhase === 'intro') {
         const newIntroCount = introExchangeCount + 1;
         setIntroExchangeCount(newIntroCount);
-        
+
         console.log('📊 Intro exchange:', newIntroCount, 'of 2');
-        
+
         if (newIntroCount >= 2) {
           console.log('🚀 TRANSITIONING: intro → practice');
-          
+
           phaseToUse = 'practice';
           role = scenario?.aiRole || 'friend';
           characterModeActive = true;
-          
+
           setCurrentPhase('practice');
           setIsInCharacterMode(true);
           setCharacterRole(role);

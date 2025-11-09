@@ -1,12 +1,33 @@
 import OpenAI from 'openai';
+import curriculum from '../content/curriculum/curriculum-index';
 
 const openai = new OpenAI({
   apiKey: import.meta.env.VITE_OPENAI_API_KEY,
   dangerouslyAllowBrowser: true
 });
 
+// Utility to safely extract examples/tips from curriculum
+function getCurriculumContent(gradeLevel = '6', scenario = {}) {
+  const gradeKey = curriculum.getGradeKey(gradeLevel); // e.g., "6-8"
+  const gradeData = curriculum.grades?.[gradeKey];
+  const topicData = scenario?.title
+    ? gradeData?.scenarios?.find(s => s.title === scenario.title)
+    : gradeData?.defaultScenario;
+
+  return {
+    tips: topicData?.tips || gradeData?.defaultTips || [],
+    example: topicData?.example || gradeData?.defaultExample || '',
+    scenarioPrompt: topicData?.prompt || 'Let’s pretend we’re practicing a real-life situation.'
+  };
+}
+
 class CleanVoiceService {
-  async generateResponse({ conversationHistory = [], scenario = {}, gradeLevel = '6-8', persona = '' }) {
+  async generateResponse({
+    conversationHistory = [],
+    scenario = {},
+    gradeLevel = '6',
+    mode = 'default' // e.g., "shy", "funny", "supportive", etc.
+  }) {
     const turnCount = conversationHistory.filter(m => m.role === 'user').length;
 
     const messages = conversationHistory
@@ -16,33 +37,46 @@ class CleanVoiceService {
         content: (msg?.text || msg?.content || '').trim()
       }));
 
+    const { tips, example, scenarioPrompt } = getCurriculumContent(gradeLevel, scenario);
+
     let systemPrompt = '';
 
     if (turnCount === 0) {
-      systemPrompt = `You're Cue, a warm social coach. Greet a grade ${gradeLevel} student. Keep it under 15 words.`;
+      systemPrompt = `You're Cue, a warm, relatable social coach for grade ${gradeLevel}.
+Greet the student casually and ask how they're feeling today. Under 15 words.`;
     } else if (turnCount === 1) {
-      systemPrompt = `You're Cue helping with ${scenario?.title || 'a conversation skill'}.
+      systemPrompt = `You're Cue, helping a grade ${gradeLevel} student with "${scenario?.title || 'a social situation'}".
 
-The student responded. Now:
-- Acknowledge them warmly
-- Share 2-3 practical tips
-- Give 1 example of what to say
-- Offer a practice scenario
-- Ask what they’d say
+Your tone should match their grade. Be friendly, not robotic.
 
-Speak like a real coach. Use age-appropriate language for grade ${gradeLevel}. ${
-        persona ? `Keep in mind the student is acting ${persona}.` : ''
-      }
+Do the following:
+- Acknowledge their message warmly.
+- Share 2 quick tips based on this topic: ${tips.slice(0, 2).join(', ')}
+- Give one example: "${example}"
+- Set up a short scenario: "${scenarioPrompt}"
+- Ask: “What would you say?”
 
-No symbols or formatting. Max 50 words.`;
-    } else if (turnCount <= 5) {
-      systemPrompt = `You're a friendly peer practicing with a grade ${gradeLevel} student.
+Sound natural — like a real conversation. Avoid overexplaining. Under 50 words.`;
+    } else if (turnCount >= 2 && turnCount <= 5) {
+      systemPrompt = `You're a student at school. You're practicing with someone roleplaying a classmate.
 
-They just said something—respond naturally and supportively in under 30 words. ${
-        persona ? `You are a ${persona} student.` : ''
-      }`;
+They just said something to you. Respond naturally — friendly, realistic, brief. Stay in character. 30 words or less.`;
     } else {
-      systemPrompt = `You're Cue wrapping up. Give warm, specific feedback to a grade ${gradeLevel} student. Max 30 words.`;
+      systemPrompt = `You're Cue again. Time to wrap up. Mention one thing they did well, give encouragement, and end on a positive note. 30 words max.`;
+    }
+
+    // Persona modifier (optional)
+    const personaTone =
+      mode === 'shy'
+        ? 'Speak gently, use simple phrases, be encouraging.'
+        : mode === 'funny'
+        ? 'Be playful and lighthearted but stay on topic.'
+        : mode === 'supportive'
+        ? 'Be especially kind and affirming.'
+        : '';
+
+    if (personaTone) {
+      systemPrompt += `\n\nAlso, persona mode: ${mode}. ${personaTone}`;
     }
 
     try {
@@ -50,7 +84,7 @@ They just said something—respond naturally and supportively in under 30 words.
         model: 'gpt-4-turbo-preview',
         messages: [{ role: 'system', content: systemPrompt }, ...messages],
         temperature: 0.8,
-        max_tokens: 120
+        max_tokens: 160
       });
 
       const aiResponse = response.choices[0]?.message?.content?.trim() || '';
@@ -58,33 +92,15 @@ They just said something—respond naturally and supportively in under 30 words.
       return {
         aiResponse,
         shouldContinue: turnCount < 7,
-        phase: turnCount < 2 ? 'coach' : turnCount < 6 ? 'peer' : 'feedback'
+        phase: turnCount < 2 ? 'intro' : turnCount < 6 ? 'practice' : 'feedback'
       };
     } catch (error) {
-      console.error('❌ Error:', error);
-      throw error;
-    }
-  }
-
-  async generateVoicePrompt({ transcript, phase = 'coach', gradeLevel = '6-8', persona = '' }) {
-    const prompt = `Rewrite the following message for voice. Keep it friendly, concise, and natural for a grade ${gradeLevel} student. ${
-      persona ? `Match a ${persona} tone.` : ''
-    } Speak like a real person, not a script. Max 30 words.
-
-Message: """${transcript}"""`;
-
-    try {
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
-        messages: [{ role: 'system', content: prompt }],
-        temperature: 0.7,
-        max_tokens: 60
-      });
-
-      return response.choices[0]?.message?.content?.trim();
-    } catch (error) {
-      console.error('❌ Error generating voice prompt:', error);
-      return transcript?.slice(0, 200); // fallback
+      console.error('❌ Error generating response:', error);
+      return {
+        aiResponse: "Hmm, something went wrong. Let's try that again!",
+        shouldContinue: false,
+        phase: 'error'
+      };
     }
   }
 }

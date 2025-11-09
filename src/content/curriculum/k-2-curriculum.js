@@ -10,7 +10,7 @@
 export const k2Curriculum = {
     gradeRange: 'K-2',
     ageRange: '5-8 years',
-    
+  
     timing: {
       pace: 'LIVELY',
       initialWait: 2000,
@@ -18,33 +18,56 @@ export const k2Curriculum = {
       helpTimeout: 2000,
       maxTurnLength: 10 // words
     },
-    
+  
+    metaGoals: [
+      'Learn to express and recognize basic emotions',
+      'Practice foundational greetings and introductions',
+      'Develop confidence initiating friendly conversation',
+      'Understand turn-taking and social fairness'
+    ],
+  
+    toneAnalysis: {
+      detectShyness: true,
+      detectSilliness: true,
+      feedbackMessages: {
+        shy: "It's okay to be a little shy. Want to try again with a big brave voice?",
+        silly: "That was funny! But let’s try using our friendly words now."
+      }
+    },
+  
+    feedbackSettings: {
+      enableCorrections: true,
+      praiseOnMatch: true,
+      redirectOnMiss: true,
+      encourageRetries: true
+    },
+  
     themes: [
       {
         id: 'greetings',
         title: 'Saying Hello',
         description: 'Basic greetings and introductions',
-        
+  
         lessons: [
           {
             id: 'hello-basics',
             title: 'Hello and Goodbye',
             difficulty: 'beginner',
             estimatedTime: '10 minutes',
-            
+  
             objectives: [
               'Say "hello" with eye contact',
               'Wave when greeting',
               'Say "goodbye" at end'
             ],
-            
+  
             scenarios: [
               {
                 id: 'meeting-friend',
                 title: 'Meeting a Friend',
                 context: 'You see your friend at the playground',
                 aiRole: 'friend',
-                
+  
                 phases: [
                   {
                     phase: 'intro',
@@ -71,7 +94,7 @@ export const k2Curriculum = {
                 title: 'Meeting Someone New',
                 context: 'There is a new kid in your class',
                 aiRole: 'new student',
-                
+  
                 phases: [
                   {
                     phase: 'intro',
@@ -95,25 +118,26 @@ export const k2Curriculum = {
               }
             ]
           },
+  
           {
             id: 'my-name-is',
             title: 'Telling Your Name',
             difficulty: 'beginner',
             estimatedTime: '10 minutes',
-            
+  
             objectives: [
               'Say "My name is..."',
               'Ask "What\'s your name?"',
               'Remember to listen'
             ],
-            
+  
             scenarios: [
               {
                 id: 'introduce-yourself',
                 title: 'Introducing Yourself',
                 context: 'Someone asks your name',
                 aiRole: 'friendly person',
-                
+  
                 phases: [
                   {
                     phase: 'intro',
@@ -139,32 +163,32 @@ export const k2Curriculum = {
           }
         ]
       },
-      
+  
       {
         id: 'sharing',
         title: 'Sharing and Taking Turns',
         description: 'Learning to share and wait for your turn',
-        
+  
         lessons: [
           {
             id: 'asking-nicely',
             title: 'Asking to Play',
             difficulty: 'beginner',
             estimatedTime: '10 minutes',
-            
+  
             objectives: [
               'Say "Can I play?"',
               'Say "please"',
               'Wait for answer'
             ],
-            
+  
             scenarios: [
               {
                 id: 'join-game',
                 title: 'Joining a Game',
                 context: 'Friends are playing a game',
                 aiRole: 'friend playing',
-                
+  
                 phases: [
                   {
                     phase: 'intro',
@@ -188,25 +212,26 @@ export const k2Curriculum = {
               }
             ]
           },
+  
           {
             id: 'taking-turns',
             title: 'Waiting Your Turn',
             difficulty: 'intermediate',
             estimatedTime: '10 minutes',
-            
+  
             objectives: [
               'Say "Your turn"',
               'Wait patiently',
               'Say "My turn now?"'
             ],
-            
+  
             scenarios: [
               {
                 id: 'playground-turn',
                 title: 'Slide Turn',
                 context: 'Waiting for the slide',
                 aiRole: 'friend on slide',
-                
+  
                 phases: [
                   {
                     phase: 'intro',
@@ -232,32 +257,32 @@ export const k2Curriculum = {
           }
         ]
       },
-      
+  
       {
         id: 'feelings',
         title: 'Talking About Feelings',
         description: 'Expressing emotions with words',
-        
+  
         lessons: [
           {
             id: 'happy-sad',
             title: 'Happy and Sad',
             difficulty: 'beginner',
             estimatedTime: '10 minutes',
-            
+  
             objectives: [
               'Say "I feel happy"',
               'Say "I feel sad"',
               'Recognize feelings in others'
             ],
-            
+  
             scenarios: [
               {
                 id: 'feeling-happy',
                 title: 'When You Feel Happy',
                 context: 'Something good happened',
                 aiRole: 'friend',
-                
+  
                 phases: [
                   {
                     phase: 'intro',
@@ -284,7 +309,7 @@ export const k2Curriculum = {
         ]
       }
     ],
-    
+  
     characterModes: {
       friend: {
         personality: 'friendly, playful, encouraging',

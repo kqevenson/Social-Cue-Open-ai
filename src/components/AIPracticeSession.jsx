@@ -1,268 +1,262 @@
-import React, { useState } from 'react';
-import { Sparkles, Loader, ArrowRight, Lightbulb, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
-import { apiService } from '../services/api';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Sparkles, ArrowRight, Lightbulb, Clock, BookOpen, Brain, ChevronLeft } from 'lucide-react';
+import {
+  getScenariosByGrade,
+  getScenarioForGrade,
+  normalizeGradeLevel
+} from '../data/voicePracticeScenarios';
 
-export default function AIPracticeSession({ category, gradeLevel, onComplete }) {
+const LoadingView = ({ onBack }) => (
+  <div className="min-h-screen bg-black text-white flex items-center justify-center relative">
+    {onBack && (
+      <button
+        onClick={onBack}
+        className="absolute top-6 left-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition"
+      >
+        <ChevronLeft className="w-4 h-4" />
+        Back
+      </button>
+    )}
+    <div className="text-center max-w-md mx-auto px-6">
+      <div className="mb-6">
+        <div className="w-20 h-20 mx-auto mb-4 relative">
+          <div className="absolute inset-0 border-4 border-blue-500/20 rounded-full" />
+          <div className="absolute inset-0 border-4 border-transparent border-t-blue-500 rounded-full animate-spin" />
+          <Sparkles className="w-8 h-8 text-yellow-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+        </div>
+      </div>
+      <h2 className="text-2xl font-bold mb-4 text-white">🎨 Creating fun questions just for you...</h2>
+      <p className="text-lg text-gray-400 mb-2">AI is crafting personalized scenarios</p>
+      <p className="text-sm text-gray-500">This will only take a moment!</p>
+    </div>
+  </div>
+);
+
+const ErrorView = ({ message, onBack, onRetry }) => (
+  <div className="min-h-screen bg-black text-white flex items-center justify-center p-6 relative">
+    {onBack && (
+      <button
+        onClick={onBack}
+        className="absolute top-6 left-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition"
+      >
+        <ChevronLeft className="w-4 h-4" />
+        Back
+      </button>
+    )}
+    <div className="max-w-md text-center space-y-4">
+      <h2 className="text-2xl font-bold">Oops!</h2>
+      <p className="text-gray-400">{message}</p>
+      {onRetry && (
+        <button
+          onClick={onRetry}
+          className="bg-gradient-to-r from-blue-500 to-emerald-400 text-white px-6 py-3 rounded-full font-bold inline-flex items-center gap-2 mx-auto"
+        >
+          <ArrowRight className="w-4 h-4" />
+          Try Again
+        </button>
+      )}
+    </div>
+  </div>
+);
+
+export default function AIPracticeSession({
+  gradeLevel = '6-8',
+  onBack,
+  onStartScenario
+}) {
   const [loading, setLoading] = useState(true);
-  const [scenarios, setScenarios] = useState([]);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [selectedOption, setSelectedOption] = useState(null);
-  const [feedback, setFeedback] = useState(null);
   const [error, setError] = useState(null);
+  const [scenarios, setScenarios] = useState([]);
+  const [selectedScenario, setSelectedScenario] = useState(null);
 
-  const generateAllScenarios = async () => {
-    setLoading(true);
-    setError(null);
-    setSelectedOption(null);
-    setFeedback(null);
-    setCurrentQuestionIndex(0);
-    
+  const normalizedGrade = useMemo(() => normalizeGradeLevel(gradeLevel), [gradeLevel]);
+
+  useEffect(() => {
     try {
-      console.log(`🎨 Creating fun questions just for you...`);
-      const allScenarios = await apiService.generateScenarios(
-        category,
-        gradeLevel,
-        'social interaction'
-      );
-      
-      console.log(`📚 Loaded ${allScenarios.length} questions for practice session`);
-      setScenarios(allScenarios);
+      setLoading(true);
+      setError(null);
+
+      const gradeScenarios = getScenariosByGrade(normalizedGrade);
+
+      if (!Array.isArray(gradeScenarios) || gradeScenarios.length === 0) {
+        setScenarios([]);
+        setSelectedScenario(null);
+        setError('No practice scenarios available for this grade yet.');
+      } else {
+        setScenarios(gradeScenarios);
+        const initialScenario = getScenarioForGrade(gradeScenarios[0].id, normalizedGrade);
+        setSelectedScenario(initialScenario);
+      }
     } catch (err) {
-      setError('Failed to generate scenarios. Please try again.');
-      console.error('❌ Error generating scenarios:', err);
+      console.error('❌ Failed to load voice practice scenarios:', err);
+      setError('Unable to load voice practice scenarios. Please try again later.');
     } finally {
       setLoading(false);
     }
+  }, [normalizedGrade]);
+
+  const handleScenarioSelect = (scenario) => {
+    const gradeSpecificScenario = getScenarioForGrade(scenario.id, normalizedGrade);
+    setSelectedScenario(gradeSpecificScenario);
   };
 
-  const handleOptionSelect = async (index) => {
-    setSelectedOption(index);
-    
-    // Get AI feedback for this choice
-    try {
-      const userHistory = {
-        recentChoices: 'practiced scenarios today',
-        confidenceLevel: 'building'
-      };
-      
-      const aiFeedback = await apiService.generatePersonalizedFeedback({
-        scenarioContext: scenarios[currentQuestionIndex].context,
-        question: scenarios[currentQuestionIndex].question,
-        studentChoice: scenarios[currentQuestionIndex].options[index].text,
-        correctAnswer: scenarios[currentQuestionIndex].options.find(opt => opt.quality === 'excellent')?.text,
-        choiceQuality: scenarios[currentQuestionIndex].options[index].quality,
-        gradeLevel: gradeLevel,
-        studentStrengths: [],
-        studentWeaknesses: [],
-        previousPerformance: userHistory
-      });
-      
-      setFeedback(aiFeedback);
-    } catch (err) {
-      console.error('Failed to get AI feedback:', err);
-      // Fall back to scenario feedback
-      setFeedback(scenarios[currentQuestionIndex].options[index].feedback);
-    }
-  };
+  const handleStart = () => {
+    if (!selectedScenario) return;
 
-  const nextQuestion = () => {
-    if (currentQuestionIndex < scenarios.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-      setSelectedOption(null);
-      setFeedback(null);
-      console.log(`📝 Displaying question ${currentQuestionIndex + 2} of ${scenarios.length}`);
+    if (typeof onStartScenario === 'function') {
+      onStartScenario(selectedScenario);
     } else {
-      // All questions completed
-      console.log(`🎉 Practice session completed! All ${scenarios.length} questions finished.`);
-      // Call onComplete to navigate back to home
-      if (onComplete) {
-        onComplete();
-      } else {
-        console.warn('onComplete prop not provided to AIPracticeSession');
-      }
+      console.log('🎯 Voice scenario selected:', selectedScenario);
+      alert('Voice practice is coming soon!');
     }
   };
-
-  const restartSession = () => {
-    generateAllScenarios();
-  };
-
-  // Initial load
-  React.useEffect(() => {
-    generateAllScenarios();
-  }, []);
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto px-6">
-          <div className="mb-6">
-            <div className="w-20 h-20 mx-auto mb-4 relative">
-              <div className="absolute inset-0 border-4 border-blue-500/20 rounded-full"></div>
-              <div className="absolute inset-0 border-4 border-transparent border-t-blue-500 rounded-full animate-spin"></div>
-              <Sparkles className="w-8 h-8 text-yellow-400 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-            </div>
-          </div>
-          <h2 className="text-2xl font-bold mb-4 text-white">🎨 Creating fun questions just for you...</h2>
-          <p className="text-lg text-gray-400 mb-2">AI is crafting personalized scenarios</p>
-          <p className="text-sm text-gray-500">This will only take a moment!</p>
-        </div>
-      </div>
-    );
+    return <LoadingView onBack={onBack} />;
   }
 
   if (error) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center p-6">
-        <div className="max-w-md text-center">
-          <XCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-4">Oops!</h2>
-          <p className="text-gray-400 mb-6">{error}</p>
-          <button
-            onClick={restartSession}
-            className="bg-gradient-to-r from-blue-500 to-emerald-400 text-white px-6 py-3 rounded-full font-bold flex items-center gap-2 mx-auto"
-          >
-            <RefreshCw className="w-5 h-5" />
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
+    return <ErrorView message={error} onBack={onBack} onRetry={null} />;
   }
 
-  if (!scenarios.length || currentQuestionIndex >= scenarios.length) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center p-6">
-        <div className="max-w-md text-center">
-          <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full flex items-center justify-center">
-            <CheckCircle className="w-10 h-10 text-white" />
-          </div>
-          <h2 className="text-3xl font-bold mb-4">🎉 Great Job!</h2>
-          <p className="text-lg text-gray-300 mb-6">You've completed all the practice questions!</p>
-          <div className="space-y-3">
-            <button
-              onClick={restartSession}
-              className="w-full bg-gradient-to-r from-blue-500 to-emerald-400 text-white font-bold py-4 px-6 rounded-full flex items-center justify-center gap-2"
-            >
-              <RefreshCw className="w-5 h-5" />
-              Practice Again
-            </button>
-            <button
-              onClick={() => {
-                console.log('🏠 Back to Home button clicked!');
-                if (onComplete) {
-                  onComplete();
-                } else {
-                  console.warn('onComplete prop not provided');
-                }
-              }}
-              className="w-full bg-white/10 text-white font-bold py-4 px-6 rounded-full hover:bg-white/20 transition-colors"
-            >
-              Back to Home
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  if (!scenarios.length) {
+    return <ErrorView message="No practice scenarios found." onBack={onBack} onRetry={null} />;
   }
-
-  const currentScenario = scenarios[currentQuestionIndex];
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
-      <div className="max-w-4xl mx-auto">
-        {/* Progress Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-yellow-400" />
-            <span className="text-sm text-yellow-400 font-bold">Practice Session</span>
+    <div className="min-h-screen bg-black text-white relative">
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="absolute top-6 left-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Back
+        </button>
+      )}
+
+      <div className="max-w-6xl mx-auto px-6 py-20">
+        <div className="mb-12">
+          <div className="inline-flex items-center gap-3 text-yellow-400 uppercase tracking-wide text-sm font-semibold">
+            <Sparkles className="w-4 h-4" />
+            Voice Practice Library · Grade {normalizedGrade.toUpperCase()}
           </div>
-          <div className="text-sm text-gray-400">
-            Question {currentQuestionIndex + 1} of {scenarios.length}
+          <h1 className="mt-4 text-4xl md:text-5xl font-bold">Choose a scenario to practice</h1>
+          <p className="mt-3 text-gray-400 max-w-2xl">
+            Select a topic below to see the scenario details, learning objectives, and practice prompts tailored to your grade level.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[320px,1fr] gap-8">
+          <div className="space-y-3">
+            {scenarios.map((scenario) => {
+              const gradeScenario = getScenarioForGrade(scenario.id, normalizedGrade);
+              const isActive = selectedScenario?.id === scenario.id;
+
+              return (
+                <button
+                  key={scenario.id}
+                  onClick={() => handleScenarioSelect(scenario)}
+                  className={`w-full text-left p-5 rounded-2xl border transition-all duration-200 flex items-start gap-4 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-blue-500/30 via-purple-500/20 to-emerald-500/20 border-blue-500/50 shadow-lg shadow-blue-500/20'
+                      : 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/10'
+                  }`}
+                >
+                  <div className="text-3xl">
+                    {gradeScenario?.icon || scenario.icon || '🎤'}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold mb-1">
+                      {gradeScenario?.title || scenario.title[normalizedGrade]}
+                    </h3>
+                    <p className="text-sm text-gray-400">
+                      {gradeScenario?.description || scenario.description[normalizedGrade]}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
           </div>
-        </div>
 
-        {/* Progress Bar */}
-        <div className="w-full bg-white/10 rounded-full h-2 mb-8">
-          <div 
-            className="bg-gradient-to-r from-blue-500 to-emerald-400 h-2 rounded-full transition-all duration-500"
-            style={{ width: `${((currentQuestionIndex + 1) / scenarios.length) * 100}%` }}
-          />
-        </div>
-
-        {/* Scenario Context */}
-        <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-8 mb-6">
-          <h2 className="text-2xl font-bold mb-4">{category}</h2>
-          <p className="text-lg text-gray-300">{currentScenario.context}</p>
-        </div>
-
-        {/* Options */}
-        <div className="space-y-4 mb-6">
-          {currentScenario.options?.map((option, index) => (
-            <button
-              key={index}
-              onClick={() => handleOptionSelect(index)}
-              disabled={selectedOption !== null}
-              className={`w-full text-left p-6 rounded-2xl border-2 transition-all ${
-                selectedOption === index
-                  ? option.isGood
-                    ? 'bg-emerald-500/20 border-emerald-500'
-                    : 'bg-orange-500/20 border-orange-500'
-                  : selectedOption !== null
-                  ? 'opacity-50 border-white/10'
-                  : 'border-white/10 hover:border-blue-500/50 hover:bg-white/5'
-              }`}
-            >
-              <p className="text-lg">{option.text}</p>
-            </button>
-          ))}
-        </div>
-
-        {/* Feedback */}
-        {selectedOption !== null && feedback && (
-          <div className={`p-6 rounded-2xl border-2 ${
-            currentScenario.options[selectedOption].isGood
-              ? 'bg-emerald-500/20 border-emerald-500'
-              : 'bg-orange-500/20 border-orange-500'
-          }`}>
-            <div className="flex items-start gap-3 mb-4">
-              {currentScenario.options[selectedOption].isGood ? (
-                <CheckCircle className="w-6 h-6 text-emerald-400 flex-shrink-0" />
-              ) : (
-                <XCircle className="w-6 h-6 text-orange-400 flex-shrink-0" />
-              )}
-              <div>
-                <h3 className="font-bold text-xl mb-2">
-                  {currentScenario.options[selectedOption].isGood ? 'Great Choice!' : 'Let\'s Learn!'}
-                </h3>
-                <p className="text-gray-300">{feedback}</p>
+          <div className="bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur">
+            {!selectedScenario ? (
+              <div className="text-center text-gray-400">
+                Select a scenario on the left to view practice details.
               </div>
-            </div>
+            ) : (
+              <div className="space-y-6">
+                <div>
+                  <div className="inline-flex items-center gap-2 text-xs uppercase tracking-wide text-blue-300">
+                    <span>{selectedScenario.category?.replace(/-/g, ' ')}</span>
+                  </div>
+                  <h2 className="mt-2 text-3xl font-bold text-white">
+                    {selectedScenario.title}
+                  </h2>
+                  <p className="mt-3 text-gray-300 text-base">
+                    {selectedScenario.description}
+                  </p>
+                </div>
 
-            {currentScenario.options[selectedOption].proTip && (
-              <div className="flex items-start gap-3 p-4 bg-blue-500/10 rounded-xl border border-blue-500/30 mt-4">
-                <Lightbulb className="w-5 h-5 text-blue-400 flex-shrink-0" />
-                <p className="text-sm text-blue-300">{currentScenario.options[selectedOption].proTip}</p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
+                      <Clock className="w-4 h-4" />
+                      Estimated Time
+                    </div>
+                    <p className="mt-2 text-lg font-semibold text-white">
+                      {selectedScenario.estimatedDuration || 5} minutes
+                    </p>
+                  </div>
+
+                  <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-blue-300">
+                      <BookOpen className="w-4 h-4" />
+                      Practice Partner
+                    </div>
+                    <p className="mt-2 text-lg font-semibold text-white">
+                      {selectedScenario.characterRole || 'Coach Cue'}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedScenario.learningObjectives?.length > 0 && (
+                  <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-purple-300 mb-3">
+                      <Brain className="w-4 h-4" />
+                      Learning Objectives
+                    </div>
+                    <ul className="space-y-2 text-sm text-gray-200">
+                      {selectedScenario.learningObjectives.map((objective, index) => (
+                        <li key={`${selectedScenario.id}-objective-${index}`} className="flex gap-2">
+                          <span className="text-blue-300">•</span>
+                          <span>{objective}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {selectedScenario.setupPrompt && (
+                  <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
+                    <div className="text-sm font-semibold text-amber-300 mb-2">Voice Coach Prompt</div>
+                    <p className="text-gray-200 leading-relaxed">
+                      {selectedScenario.setupPrompt}
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleStart}
+                  className="w-full mt-4 bg-gradient-to-r from-blue-500 to-emerald-400 text-white font-bold py-4 px-6 rounded-full flex items-center justify-center gap-2 hover:shadow-lg transition-all"
+                >
+                  Start Voice Practice
+                  <ArrowRight className="w-5 h-5" />
+                </button>
               </div>
             )}
-
-            <button
-              onClick={() => {
-                console.log('🎯 Finish Practice button clicked!', {
-                  currentQuestionIndex,
-                  totalScenarios: scenarios.length,
-                  isLastQuestion: currentQuestionIndex >= scenarios.length - 1,
-                  onComplete: !!onComplete
-                });
-                nextQuestion();
-              }}
-              className="w-full mt-6 bg-gradient-to-r from-blue-500 to-emerald-400 text-white font-bold py-4 px-6 rounded-full flex items-center justify-center gap-2 hover:shadow-lg transition-all"
-            >
-              {currentQuestionIndex < scenarios.length - 1 ? 'Next Question' : 'Finish Practice'}
-              <ArrowRight className="w-5 h-5" />
-            </button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

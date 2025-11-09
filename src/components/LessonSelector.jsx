@@ -1,45 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import curriculum from '../content/curriculum/curriculum-index.js';
+import React from 'react';
+import curriculumIndex from '../content/curriculum/curriculum-index';
 
-export const LessonSelector = ({ gradeLevel, onSelectLesson }) => {
-  const [topics, setTopics] = useState([]);
+const LessonSelector = ({ gradeLevel = '6', onLessonSelect }) => {
+  // Normalize input to match curriculum keys
+  const getGradeKey = (level) => {
+    const n = parseInt(level);
+    if (n <= 2 || level === 'k') return 'k-2';
+    if (n <= 5) return '3-5';
+    if (n <= 8) return '6-8';
+    return '9-12';
+  };
 
-  useEffect(() => {
-    const availableTopics = curriculum.getTopicsForGrade(gradeLevel) || [];
-    setTopics(availableTopics);
-  }, [gradeLevel]);
-
-  const topicsByUnit = topics.reduce((acc, topic) => {
-    if (!acc[topic.unit]) acc[topic.unit] = [];
-    acc[topic.unit].push(topic);
-    return acc;
-  }, {});
+  const gradeKey = getGradeKey(gradeLevel);
+  const lessons = curriculumIndex[gradeKey] || [];
 
   return (
     <div className="lesson-selector">
-      <h2>What do you want to practice?</h2>
-
-      {Object.entries(topicsByUnit).map(([unitName, unitTopics]) => (
-        <div key={unitName} className="unit-section">
-          <h3>{unitName}</h3>
-
-          <div className="topic-grid">
-            {unitTopics.map((topic) => (
-              <button
-                key={topic.id}
-                className="topic-card"
-                onClick={() => onSelectLesson(topic.id)}
-              >
-                <h4>{topic.title}</h4>
-                <p className="skills">{(topic.skills || []).slice(0, 2).join(', ')}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
+      <h3>Pick a lesson to practice</h3>
+      <ul>
+        {lessons.map((lesson, i) => (
+          <li key={i}>
+            <button onClick={() => onLessonSelect(lesson)}>
+              {lesson.title}
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 };
 
 export default LessonSelector;
-
