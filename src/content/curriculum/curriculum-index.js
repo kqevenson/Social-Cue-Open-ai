@@ -169,3 +169,18 @@ export default {
   searchLessons,
   allCurricula
 };
+// Utility to get grade-specific coaching prompt
+export function getCurriculumPromptForGrade(gradeLevel) {
+  const grade = parseInt(gradeLevel);
+  if (grade >= 0 && grade <= 2) {
+    return "Use very simple words and short sentences. Focus on emotions, kindness, and sharing.";
+  } else if (grade >= 3 && grade <= 5) {
+    return "Speak clearly. Use examples from the playground, lunch, or group work. Focus on friendships and respectful behavior.";
+  } else if (grade >= 6 && grade <= 8) {
+    return "Be relatable and casual. Include examples from class projects, texting, or peer pressure. Encourage positive responses.";
+  } else if (grade >= 9 && grade <= 12) {
+    return "Use mature, respectful tone. Reflect real-world and social dynamics. Help them build confidence in self-expression.";
+  } else {
+    return "Speak clearly and kindly. Use school-related examples. Support the student's social development.";
+  }
+}
