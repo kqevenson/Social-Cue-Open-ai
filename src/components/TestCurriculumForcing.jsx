@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getIntroductionSequence } from '../content/training/introduction-scripts';
+import { getVoiceIntro } from '../content/training/introduction-scripts';
 
 const TestCurriculumForcing = () => {
   const [testResult, setTestResult] = useState(null);
@@ -20,9 +20,12 @@ const TestCurriculumForcing = () => {
     ];
 
     const gradeLevel = '7';
-    const scenario = { title: 'starting a conversation' };
-    const introData = getIntroductionSequence(gradeLevel);
-    const curriculumScript = introData.scenarios['starting-conversation'].afterResponse;
+    const topicId = 'entering-group-conversations';
+    const scenario = { title: 'Entering Group Conversations', topicId };
+    const introData = getVoiceIntro(gradeLevel, topicId, scenario);
+    console.log('Topic:', topicId);
+    console.log('IntroData:', introData);
+    const curriculumScript = introData.firstPrompt;
 
     console.log('📋 Expected curriculum:', curriculumScript);
 

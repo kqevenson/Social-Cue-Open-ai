@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import standaloneContentService from './contentService.js';
-import { getIntroductionSequence } from '../content/training/introduction-scripts.js';
+import { getVoiceIntro } from '../content/training/introduction-scripts.js';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -46,11 +46,19 @@ export async function generateConversationResponse({
     );
 
     if (curriculumScript) {
-      console.log('✅ CURRICULUM SCRIPT FOUND:');
-      console.log(curriculumScript);
-      console.log('📝 This will be FORCED into user message');
-    } else {
-      console.log('ℹ️  No curriculum script for this turn - AI will respond naturally');
+      console.log('✅ Curriculum script found for phase:', currentPhase);
+      return {
+        response: curriculumScript,
+        phase: currentPhase,
+        aiResponse: curriculumScript,
+        text: curriculumScript,
+        shouldContinue: true,
+        nextPhase: currentPhase,
+        exchangeCount: exchangeCount,
+        validation: { valid: true, warnings: [] },
+        hasEvaluation: false,
+        feedback: null
+      };
     }
 
     let aiResponse = '';
@@ -231,19 +239,6 @@ function generateSessionFeedback(conversationHistory) {
   };
 }
 
-function mapScenarioToKey(scenario) {
-  if (!scenario) return 'starting-conversation';
-  const title = (scenario.title || scenario.name || '').toLowerCase();
-
-  if (title.includes('start') || title.includes('conversation')) return 'starting-conversation';
-  if (title.includes('friend')) return 'making-friends';
-  if (title.includes('attention') || title.includes('listen')) return 'paying-attention';
-  if (title.includes('help')) return 'asking-help';
-  if (title.includes('join') || title.includes('group')) return 'joining-group';
-
-  return 'starting-conversation';
-}
-
 function deriveCurriculumScript(currentPhase, conversationHistory, gradeLevel, scenario) {
   try {
     const turnCount = conversationHistory.length;
@@ -253,26 +248,19 @@ function deriveCurriculumScript(currentPhase, conversationHistory, gradeLevel, s
       return null;
     }
 
-    const introData = getIntroductionSequence(gradeLevel);
-    const scenarioKey = mapScenarioToKey(scenario);
-
-    if (!introData.scenarios?.[scenarioKey]) {
-      console.log('⚠️  Scenario not found in curriculum:', scenarioKey);
-      return null;
-    }
-
-    const script = introData.scenarios[scenarioKey];
+    const topicDescriptor =
+      scenario?.topicId || scenario?.topic || scenario?.topicTitle || scenario?.title || '';
+    const introData = getVoiceIntro(gradeLevel, topicDescriptor, scenario);
 
     if (turnCount === 0) {
-      const completeIntro = `${introData.fullIntro || ''} ${script.intro || ''}`.replace(/\s+/g, ' ').trim();
-      console.log('✅ Using COMPLETE curriculum intro');
-      console.log('Complete intro:', completeIntro);
-      return completeIntro;
+      const firstLine = `${introData.greetingIntro} ${introData.scenarioIntro}`.replace(/\s+/g, ' ').trim();
+      console.log('✅ Using topic-based intro:', firstLine);
+      return firstLine;
     }
 
     if (turnCount === 2) {
-      console.log('✅ Using curriculum AFTER-RESPONSE for turn 2');
-      return script.afterResponse;
+      console.log('✅ Using topic-based first prompt for turn 2');
+      return introData.firstPrompt;
     }
 
     console.log('ℹ️  No curriculum script for phase:', currentPhase, 'turn:', turnCount);

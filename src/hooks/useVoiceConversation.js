@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getIntroductionSequence } from '../content/training/introduction-scripts';
-import CleanVoiceService from '../services/CleanVoiceService';
+import { getVoiceIntro } from '../content/training/introduction-scripts';
+import { generateResponse } from '../services/AIResponseService';
+
 
 const TIMING_MAP = {
   'K-2': { aiDelay: 2500, silenceTimeout: 8000 },
@@ -25,19 +26,6 @@ function getFallbackIntroMessage(scenario, gradeLevel) {
   return "Hi, I'm Cue. Let's align on what we're practicing today.";
 }
 
-function getScenarioKey(scenario) {
-  if (!scenario) return 'starting-conversation';
-  const title = (scenario.title || scenario.name || '').toLowerCase();
-
-  if (title.includes('start') || title.includes('conversation')) return 'starting-conversation';
-  if (title.includes('friend')) return 'making-friends';
-  if (title.includes('attention') || title.includes('listen')) return 'paying-attention';
-  if (title.includes('help')) return 'asking-help';
-  if (title.includes('join') || title.includes('group')) return 'joining-group';
-
-  return 'starting-conversation';
-}
-
 function getIntroMessage(scenario, gradeLevel) {
   console.log('🎤 Getting intro message for:', {
     scenario: scenario?.title,
@@ -45,23 +33,17 @@ function getIntroMessage(scenario, gradeLevel) {
   });
 
   try {
-    const introData = getIntroductionSequence(gradeLevel);
+    const topicDescriptor =
+      scenario?.topic || scenario?.topicTitle || scenario?.topicId || scenario?.title || '';
+
+    const introData = getVoiceIntro(gradeLevel, topicDescriptor, scenario);
     console.log('📝 Intro data loaded:', {
-      hasScenarios: !!introData.scenarios,
+      greeting: introData.greetingIntro,
+      scenarioIntro: introData.scenarioIntro,
       gradeRange: introData.gradeRange
     });
 
-    const scenarioKey = getScenarioKey(scenario);
-    console.log('🔑 Scenario key:', scenarioKey);
-
-    if (introData.scenarios && introData.scenarios[scenarioKey]) {
-      const script = introData.scenarios[scenarioKey];
-      console.log('✅ Using scenario-specific script:', script.intro);
-      return `${introData.fullIntro.split('.')[0]}. ${script.intro}`;
-    }
-
-    console.log('⚠️  No scenario-specific script found, using general intro');
-    return introData.fullIntro;
+    return `${introData.greetingIntro} ${introData.scenarioIntro} ${introData.safetyAndConsent}`.trim();
   } catch (error) {
     console.error('❌ Error getting introduction script:', error);
     return getFallbackIntroMessage(scenario, gradeLevel);
@@ -166,7 +148,7 @@ export default function useVoiceConversation({ scenario, gradeLevel = '6', onSes
   }, [addMessage, scheduleSilenceTimeout]);
 
   const startConversation = useCallback(async () => {
-    console.log('🎬 Starting conversation with CleanVoiceService');
+    console.log('🎬 Starting conversation with AIResponseService');
     resetTimers();
     sessionActiveRef.current = true;
     setIsAIThinking(true);
@@ -176,7 +158,7 @@ export default function useVoiceConversation({ scenario, gradeLevel = '6', onSes
     setCurrentPhase('intro');
 
     try {
-      const response = await CleanVoiceService.generateResponse({
+      const response = await generateResponse({
         conversationHistory: [],
         scenario,
         gradeLevel,
@@ -201,7 +183,7 @@ export default function useVoiceConversation({ scenario, gradeLevel = '6', onSes
         sessionActiveRef.current = false;
       }
     } catch (error) {
-      console.error('❌ Failed to start conversation with CleanVoiceService:', error);
+      console.error('❌ Failed to start conversation with AI service:', error);
       const fallbackIntro = getIntroMessage(scenario, gradeLevel);
       setMessages([
         {
@@ -234,13 +216,13 @@ export default function useVoiceConversation({ scenario, gradeLevel = '6', onSes
     const phase = currentPhase;
     aiDelayTimerRef.current = setTimeout(async () => {
       try {
-        console.log('🎯 Calling CleanVoiceService...');
+        console.log('🎯 Calling AIResponseService...');
         const conversationHistoryWithUser = [
           ...messagesRef.current,
           { role: 'user', text: userText, phase }
         ];
 
-        const response = await CleanVoiceService.generateResponse({
+        const response = await generateResponse({
           conversationHistory: conversationHistoryWithUser,
           scenario,
           gradeLevel,
@@ -259,7 +241,7 @@ export default function useVoiceConversation({ scenario, gradeLevel = '6', onSes
           setIsWaitingForUser(false);
         }
       } catch (error) {
-        console.error('❌ CleanVoiceService error:', error);
+        console.error('❌ AIResponseService error:', error);
         handleAIResponse(FALLBACK_RESPONSES[phase] || FALLBACK_RESPONSES.practice, phase);
       }
     }, timing.aiDelay);

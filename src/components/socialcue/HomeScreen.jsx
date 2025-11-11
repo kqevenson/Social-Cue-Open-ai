@@ -82,12 +82,7 @@ function HomeScreen({ userData, onNavigate, darkMode, soundEffects }) {
   // Calculate stats from Firebase data with fallback to localStorage
   const calculateStats = () => {
     const { learnerProfile, sessionStats, topicMastery, lessonProgressStats } = firebaseData;
-    
-    // Calculate confidence from topic mastery average
-    const confidenceScore = topicMastery.length > 0 
-      ? Math.round(topicMastery.reduce((sum, topic) => sum + topic.percentComplete, 0) / topicMastery.length)
-      : (userData?.confidenceScore || 0);
-
+ 
     return [
       { 
         label: 'Day Streak', 
@@ -106,12 +101,6 @@ function HomeScreen({ userData, onNavigate, darkMode, soundEffects }) {
         value: String(lessonProgressStats?.completedLessons || 0), 
         icon: <Users className="w-5 h-5" />, 
         gradient: 'from-orange-400 to-orange-500' 
-      },
-      { 
-        label: 'Confidence', 
-        value: `${confidenceScore}%`, 
-        icon: <TrendingUp className="w-5 h-5" />, 
-        gradient: 'from-purple-400 to-purple-500' 
       }
     ];
   };
@@ -236,68 +225,35 @@ function HomeScreen({ userData, onNavigate, darkMode, soundEffects }) {
         )}
 
         <section className="mb-8">
-          <div className="grid grid-cols-3 gap-3">
-            {firebaseData.isLoading ? (
-              // Loading state
-              Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className={`backdrop-blur-xl border rounded-2xl p-4 transition-all duration-200 text-center animate-slideUp ${
-                  darkMode ? 'bg-white/8 border-white/20' : 'bg-white border-gray-200 shadow-sm'
-                }`} style={{ animationDelay: `${i * 100}ms` }}>
-                  <div className="flex items-center justify-center mb-2">
-                    <Loader className="w-6 h-6 animate-spin text-blue-500" />
-                  </div>
-                  <div className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Loading...</div>
-                </div>
-              ))
-            ) : firebaseData.error ? (
-              // Error state - show localStorage data with error indicator
-              stats.map((stat, i) => (
-                <div key={i} className={`backdrop-blur-xl border rounded-2xl p-4 transition-all duration-200 text-center hover:scale-105 hover:shadow-lg animate-slideUp ${
-                  darkMode ? 'bg-white/8 border-white/20 hover:bg-white/12' : 'bg-white border-gray-200 hover:bg-gray-50 shadow-sm'
-                }`} style={{ animationDelay: `${i * 100}ms` }}>
-                  <div className={`text-3xl font-bold bg-gradient-to-r ${stat.gradient} bg-clip-text text-transparent mb-1`}>{stat.value}</div>
-                  <div className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{stat.label}</div>
-                  <div className="text-xs text-orange-500 mt-1">Using cached data</div>
-                </div>
-              ))
-            ) : (
-              // Normal state with Firebase data
-              stats.map((stat, i) => (
-                <div key={i} className={`backdrop-blur-xl border rounded-2xl p-4 transition-all duration-200 text-center hover:scale-105 hover:shadow-lg animate-slideUp ${
-                  darkMode ? 'bg-white/8 border-white/20 hover:bg-white/12' : 'bg-white border-gray-200 hover:bg-gray-50 shadow-sm'
-                }`} style={{ animationDelay: `${i * 100}ms` }}>
-                  <div className={`text-3xl font-bold bg-gradient-to-r ${stat.gradient} bg-clip-text text-transparent mb-1`}>{stat.value}</div>
-                  <div className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{stat.label}</div>
-                  {firebaseData.learnerProfile && (
-                    <div className="text-xs text-emerald-500 mt-1">Live data</div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-
-        {/* Smart Practice - NEW */}
-        <section className="mb-8">
-          <div className={`p-6 rounded-2xl border-2 ${
-            darkMode 
-              ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-purple-500/50' 
-              : 'bg-gradient-to-r from-purple-50 to-pink-50 border-purple-200'
+          <div className={`backdrop-blur-xl border rounded-3xl p-6 transition-all ${
+            darkMode ? 'bg-white/6 border-white/15' : 'bg-white border-gray-200 shadow-sm'
           }`}>
-            <div className="flex items-center gap-3 mb-3">
-              <Sparkles className="w-6 h-6 text-yellow-400" />
-              <h3 className="text-xl font-bold">Smart Practice</h3>
-              <span className="bg-yellow-400 text-black text-xs font-bold px-2 py-1 rounded-full">NEW</span>
-            </div>
-            <p className={`mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-              Get personalized scenarios generated just for you
-            </p>
-            <button
-              onClick={() => onNavigate('ai-practice')}
-              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-full font-bold hover:shadow-lg transition-all"
-            >
-              Try Smart Practice
-            </button>
+            {firebaseData.isLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex flex-col items-center text-center animate-pulse">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-400 to-purple-400 opacity-40 mb-2" />
+                    <div className={`h-3 w-16 rounded-full ${darkMode ? 'bg-white/10' : 'bg-gray-200'} mb-1`} />
+                    <div className={`h-3 w-20 rounded-full ${darkMode ? 'bg-white/5' : 'bg-gray-100'}`} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                {stats.map((stat, i) => (
+                  <div key={i} className="text-center">
+                    <div className={`text-4xl font-extrabold bg-gradient-to-r ${stat.gradient} bg-clip-text text-transparent mb-1`}> {stat.value}</div>
+                    <div className={`text-sm font-semibold uppercase tracking-wide ${darkMode ? 'text-gray-300' : 'text-gray-500'}`}>{stat.label}</div>
+                    {firebaseData.error && (
+                      <div className="text-xs text-orange-500 mt-1">Using cached data</div>
+                    )}
+                    {firebaseData.learnerProfile && !firebaseData.error && (
+                      <div className="text-xs text-emerald-500 mt-1">Live data</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 

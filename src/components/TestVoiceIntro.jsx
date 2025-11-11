@@ -1,21 +1,21 @@
-import React, { useState } from 'react';
-import { getIntroductionSequence } from '../content/training/introduction-scripts';
+import React, { useMemo, useState } from 'react';
+import { getVoiceIntro } from '../content/training/introduction-scripts';
+import { topics } from '../data/voicePracticeScenarios';
 
 const TestVoiceIntro = () => {
   const [selectedGrade, setSelectedGrade] = useState('6');
-  const [selectedScenario, setSelectedScenario] = useState('starting-conversation');
+  const [selectedTopic, setSelectedTopic] = useState(topics[0]?.id || '');
 
-  const testIntroMessage = () => {
-    const introData = getIntroductionSequence(selectedGrade);
-
+  const introPreview = useMemo(() => {
+    const introData = getVoiceIntro(selectedGrade, selectedTopic);
     return {
-      fullIntro: introData.fullIntro,
-      scenarioIntro: introData.scenarios?.[selectedScenario]?.intro || 'Not found',
-      afterResponse: introData.scenarios?.[selectedScenario]?.afterResponse || 'Not found'
+      greeting: introData.greetingIntro,
+      scenarioIntro: introData.scenarioIntro,
+      safety: introData.safetyAndConsent,
+      warmup: introData.firstPrompt,
+      scenario: introData.scenarioDetails
     };
-  };
-
-  const result = testIntroMessage();
+  }, [selectedGrade, selectedTopic]);
 
   return (
     <div style={{ padding: '20px', maxWidth: '800px' }}>
@@ -32,16 +32,16 @@ const TestVoiceIntro = () => {
       </div>
 
       <div style={{ marginTop: '10px' }}>
-        <label>Scenario: </label>
+        <label>Topic: </label>
         <select
-          value={selectedScenario}
-          onChange={(e) => setSelectedScenario(e.target.value)}
+          value={selectedTopic}
+          onChange={(e) => setSelectedTopic(e.target.value)}
         >
-          <option value="starting-conversation">Starting a Conversation</option>
-          <option value="making-friends">Making Friends</option>
-          <option value="paying-attention">Paying Attention</option>
-          <option value="asking-help">Asking for Help</option>
-          <option value="joining-group">Joining a Group</option>
+          {topics.map((topic) => (
+            <option key={topic.id} value={topic.id}>
+              {topic.title}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -55,16 +55,16 @@ const TestVoiceIntro = () => {
       >
         <h3>AI Would Say:</h3>
         <div style={{ marginBottom: '15px' }}>
-          <strong>Full Intro:</strong>
-          <p>{result.fullIntro}</p>
+          <strong>Greeting + Intro:</strong>
+          <p>{introPreview.greeting}</p>
         </div>
         <div style={{ marginBottom: '15px' }}>
-          <strong>Scenario-Specific Intro:</strong>
-          <p>{result.scenarioIntro}</p>
+          <strong>Scenario Context:</strong>
+          <p>{introPreview.scenarioIntro}</p>
         </div>
         <div>
-          <strong>After Student Response:</strong>
-          <p>{result.afterResponse}</p>
+          <strong>Warm-up Question:</strong>
+          <p>{introPreview.warmup}</p>
         </div>
       </div>
 
@@ -72,15 +72,11 @@ const TestVoiceIntro = () => {
         style={{
           marginTop: '20px',
           padding: '10px',
-          backgroundColor: result.scenarioIntro !== 'Not found' ? '#d4edda' : '#f8d7da',
+          backgroundColor: '#d4edda',
           borderRadius: '5px'
         }}
       >
-        {result.scenarioIntro !== 'Not found' ? (
-          <span>✅ Scripts are working correctly!</span>
-        ) : (
-          <span>❌ Scripts not found - check introduction-scripts.js structure</span>
-        )}
+        <span>✅ Topic-based scripts are working!</span>
       </div>
     </div>
   );

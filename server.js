@@ -8,7 +8,7 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, getDoc, setDoc, query, where, getDocs, serverTimestamp, writeBatch, deleteDoc } from 'firebase/firestore';
 import adaptiveLearningRoutes from './adaptive-learning-routes.js';
 import OpenAI from 'openai';
-import { getIntroductionSequence } from './src/content/training/introduction-scripts.js';
+import { getVoiceIntro } from './src/content/training/introduction-scripts.js';
 
 dotenv.config();
 
@@ -2691,9 +2691,10 @@ CRITICAL INSTRUCTION: When you receive a message that says "RESPOND WITH EXACTLY
       console.log('💪 FORCING AI to say:', curriculumScript);
     } else if (phase === 'intro' && conversationHistory.length === 2) {
       try {
-        const introData = getIntroductionSequence(gradeLevel);
-        const scenarioKey = mapScenarioToKey(scenario);
-        const script = introData.scenarios?.[scenarioKey]?.afterResponse;
+        const topicDescriptor =
+          scenario?.topicId || scenario?.topic || scenario?.topicTitle || scenario?.title || '';
+        const introData = getVoiceIntro(gradeLevel, topicDescriptor, scenario);
+        const script = introData.firstPrompt;
         if (script) {
           messages.push({
             role: 'user',
@@ -2726,16 +2727,3 @@ CRITICAL INSTRUCTION: When you receive a message that says "RESPOND WITH EXACTLY
     return res.status(500).json({ error: error.message || 'Voice conversation failed' });
   }
 });
-
-function mapScenarioToKey(scenario) {
-  if (!scenario) return 'starting-conversation';
-  const title = (scenario.title || scenario.name || '').toLowerCase();
-
-  if (title.includes('start') || title.includes('conversation')) return 'starting-conversation';
-  if (title.includes('friend')) return 'making-friends';
-  if (title.includes('attention') || title.includes('listen')) return 'paying-attention';
-  if (title.includes('help')) return 'asking-help';
-  if (title.includes('join') || title.includes('group')) return 'joining-group';
-
-  return 'starting-conversation';
-}

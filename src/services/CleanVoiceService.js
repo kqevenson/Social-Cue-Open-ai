@@ -1,108 +1,210 @@
 import OpenAI from 'openai';
-import curriculum from '../content/curriculum/curriculum-index';
+import { getVoiceIntro } from '../content/training/introduction-scripts';
 
 const openai = new OpenAI({
   apiKey: import.meta.env.VITE_OPENAI_API_KEY,
   dangerouslyAllowBrowser: true
 });
 
-// Utility to safely extract examples/tips from curriculum
-function getCurriculumContent(gradeLevel = '6', scenario = {}) {
-  const gradeKey = curriculum.getGradeKey(gradeLevel); // e.g., "6-8"
-  const gradeData = curriculum.grades?.[gradeKey];
-  const topicData = scenario?.title
-    ? gradeData?.scenarios?.find(s => s.title === scenario.title)
-    : gradeData?.defaultScenario;
-
-  return {
-    tips: topicData?.tips || gradeData?.defaultTips || [],
-    example: topicData?.example || gradeData?.defaultExample || '',
-    scenarioPrompt: topicData?.prompt || 'Let’s pretend we’re practicing a real-life situation.'
-  };
-}
-
 class CleanVoiceService {
+  async analyzeTone(text) {
+    const content = text?.trim();
+    if (!content) return null;
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        temperature: 0.2,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a concise tone analyzer. Given a single user sentence, respond with a short interpretation in the format "tone: <one or two adjectives>; notes: <brief observation>". Keep it under 12 words.'
+          },
+          {
+            role: 'user',
+            content: `How would you describe the tone of this response?
++"${content}"`
+          }
+        ]
+      });
+
+      return response.choices?.[0]?.message?.content?.trim() || null;
+    } catch (error) {
+      console.error('❌ Tone analysis error:', error);
+      return null;
+    }
+  }
   async generateResponse({
     conversationHistory = [],
     scenario = {},
     gradeLevel = '6',
-    mode = 'default' // e.g., "shy", "funny", "supportive", etc.
+    persona = 'friendly',
+    toneHint = null
   }) {
-    const turnCount = conversationHistory.filter(m => m.role === 'user').length;
+    const gradeString = (() => {
+      if (gradeLevel == null) return '6';
+      const str = String(gradeLevel).trim();
+      if (!str) return '6';
+      const match = str.match(/\d+/);
+      if (match) return match[0];
+      return str;
+    })();
+  
+    const turnCount = Math.max(
+      0,
+      conversationHistory.filter(
+        (m) => m?.role === 'user' && ((m?.text ?? '').trim() || (m?.content ?? '').trim())
+      ).length
+    );
+  
+    const gradePrompts = {
+      'K': 'Use very short, kind sentences. Imagine you’re talking to a kindergartener.',
+      '1': 'Speak with simple words. Be cheerful and warm like a 1st grade teacher.',
+      '2': 'Keep things playful and easy to understand. Use short, clear sentences.',
+      '3': 'Speak simply and kindly, like you’re talking to a 3rd grader. Use short, friendly sentences.',
+      '4': 'Use encouraging, easy-to-read sentences. Add small examples to help them relate.',
+      '5': 'Make your tone friendly and clear. Don’t use complicated words.',
+      '6': 'Use clear, supportive language. Avoid big words and use examples that feel real to a 6th grader.',
+      '7': 'Keep things casual, like you’re a cool mentor helping them think out loud.',
+      '8': 'Use relatable tone. Show empathy and curiosity without overwhelming them.',
+      '9': 'Use slightly more mature language. Be relatable, casual, and guide them toward thinking for themselves.',
+      '10': 'Talk like a thoughtful peer—helpful and friendly. Encourage them to reflect.',
+      '11': 'Use confident but kind language. Help them go deeper with their thinking.',
+      '12': 'Speak to them like a smart young adult. Let your advice feel real, not scripted.'
+    };
+  
+    const gradeInstruction = gradePrompts[gradeString] || gradePrompts['6'];
+  
+    const topicDescriptor =
+      scenario?.topicId || scenario?.topic || scenario?.topicTitle || scenario?.title || '';
 
-    const messages = conversationHistory
-      .filter(msg => (msg?.text || msg?.content || '').trim())
-      .map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'assistant',
-        content: (msg?.text || msg?.content || '').trim()
-      }));
+    const introConfig = getVoiceIntro(gradeString, topicDescriptor, scenario);
+    const baseIntroScriptParts = [
+      introConfig.greetingIntro,
+      introConfig.scenarioIntro,
+      introConfig.safetyAndConsent
+    ].filter(Boolean);
+    const baseIntroScript = baseIntroScriptParts.length
+      ? baseIntroScriptParts.join(' ')
+      : 'Hi! I’m your practice buddy. Let’s warm up together. Ready to give it a go?';
 
-    const { tips, example, scenarioPrompt } = getCurriculumContent(gradeLevel, scenario);
-
-    let systemPrompt = '';
-
+    const scenarioContext = scenario.description
+      ? `The student is working on the following situation: "${scenario.description}"`
+      : `The scenario topic is "${topicDescriptor || scenario.title || 'social practice'}".`;
+  
+    const personaInstructions = {
+      friendly: 'You’re upbeat and supportive.',
+      shy: 'You’re quiet but kind. Keep your responses short and gentle.',
+      chatty: 'You love to talk. Respond with friendly enthusiasm.'
+    };
+  
+    const personaInstruction = personaInstructions[persona] || '';
+    const toneInstruction = toneHint ? `Learner tone hint: ${toneHint}` : '';
+  
+    const baseIdentity = `You are Cue, a friendly and warm AI coach who talks like a supportive older friend. Keep responses short (1-2 sentences), ask natural follow-up questions, celebrate wins, and never overwhelm the learner. Pause between ideas. ${gradeInstruction} ${personaInstruction} ${toneInstruction}`.trim();
+  
+    const fewShot = [
+      {
+        role: 'user',
+        content: 'uhhh maybe like… just saying hi to people?'
+      },
+      {
+        role: 'assistant',
+        content: 'Totally get that — starting convos can feel awkward sometimes. Wanna try a trick I use when I feel nervous?'
+      },
+      {
+        role: 'user',
+        content: 'yeah'
+      },
+      {
+        role: 'assistant',
+        content: "Okay cool — try smiling and saying 'Hey, I like your shirt.' Want to practice with me right now?"
+      }
+    ];
+  
+    let systemPrompt = baseIdentity;
+  
     if (turnCount === 0) {
-      systemPrompt = `You're Cue, a warm, relatable social coach for grade ${gradeLevel}.
-Greet the student casually and ask how they're feeling today. Under 15 words.`;
+      const introGuidance = baseIntroScript
+        ? `Use the following base script as your source material. Paraphrase naturally while preserving each part in order. Base script: """${baseIntroScript}"""`
+        : 'Provide a warm greeting, explain who you are, reassure them it is safe to practice, and ask for their readiness.';
+  
+      const closingQuestion = introConfig.firstPrompt
+        ? `Finish with a short question similar to: "${introConfig.firstPrompt}"`
+        : 'Finish with a short question that invites them to respond.';
+  
+      systemPrompt = baseIntroScript
+        ? `${baseIdentity}
+  You must deliver a warm paraphrase of this intro script: "${baseIntroScript}".
+  After that, ask a short question like: "${introConfig.firstPrompt || 'Ready to try it with me?'}".
+  Keep it to two sentences total.`
+        : `${baseIdentity}
+  ${scenarioContext}
+  ${introGuidance}
+  ${closingQuestion}`;
     } else if (turnCount === 1) {
-      systemPrompt = `You're Cue, helping a grade ${gradeLevel} student with "${scenario?.title || 'a social situation'}".
+      const learnerResponse = conversationHistory.at(-1)?.content ||
+        conversationHistory.at(-1)?.text || '';
+      const topicLine = introConfig.scenarioIntro || `We’re focusing on ${topicDescriptor || 'this social skill'}.`;
 
-Your tone should match their grade. Be friendly, not robotic.
+      const followupGuidance = `The learner just said: "${learnerResponse}". Respond with encouragement, reference ${topicLine}, and invite them to try it with you.`;
 
-Do the following:
-- Acknowledge their message warmly.
-- Share 2 quick tips based on this topic: ${tips.slice(0, 2).join(', ')}
-- Give one example: "${example}"
-- Set up a short scenario: "${scenarioPrompt}"
-- Ask: “What would you say?”
-
-Sound natural — like a real conversation. Avoid overexplaining. Under 50 words.`;
+      systemPrompt = `${baseIdentity}
+ ${scenarioContext}
+ ${followupGuidance}
+ Keep the tone supportive and conversational. Share 1–2 concrete suggestions and end with a question that keeps the learner engaged.`;
     } else if (turnCount >= 2 && turnCount <= 5) {
-      systemPrompt = `You're a student at school. You're practicing with someone roleplaying a classmate.
-
-They just said something to you. Respond naturally — friendly, realistic, brief. Stay in character. 30 words or less.`;
+      systemPrompt = `${baseIdentity}
+ You're roleplaying as a realistic peer practicing ${topicDescriptor || 'this skill'}. React to what the learner said in one short sentence (under 15 words) and keep the scene going.`;
     } else {
-      systemPrompt = `You're Cue again. Time to wrap up. Mention one thing they did well, give encouragement, and end on a positive note. 30 words max.`;
+      systemPrompt = `${baseIdentity}
+  Wrap up the practice with specific praise and one friendly suggestion for next time. Keep it under 20 words.`;
     }
-
-    // Persona modifier (optional)
-    const personaTone =
-      mode === 'shy'
-        ? 'Speak gently, use simple phrases, be encouraging.'
-        : mode === 'funny'
-        ? 'Be playful and lighthearted but stay on topic.'
-        : mode === 'supportive'
-        ? 'Be especially kind and affirming.'
-        : '';
-
-    if (personaTone) {
-      systemPrompt += `\n\nAlso, persona mode: ${mode}. ${personaTone}`;
-    }
-
+  
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...(turnCount >= 2 ? fewShot : []),
+      ...conversationHistory
+        .filter(msg => (msg?.text || msg?.content || '').trim())
+        .map(msg => ({
+          role: msg.role === 'user' ? 'user' : 'assistant',
+          content: (msg?.text || msg?.content || '').trim()
+        }))
+    ];
+  
     try {
       const response = await openai.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
-        messages: [{ role: 'system', content: systemPrompt }, ...messages],
-        temperature: 0.8,
+        model: 'gpt-4o-mini',
+        messages,
+        temperature: 0.6,
         max_tokens: 160
       });
-
-      const aiResponse = response.choices[0]?.message?.content?.trim() || '';
-
+  
+      let aiResponse = response.choices[0]?.message?.content?.trim() || '';
+  
+      const wrapUps = [
+        "You stayed confident—awesome job!",
+        "Nice work using friendly words!",
+        "I liked how clearly you spoke.",
+        "Your energy felt really welcoming!",
+        "You’re improving every round!"
+      ];
+  
+      if (turnCount >= 6) {
+        aiResponse += ` ${wrapUps[Math.floor(Math.random() * wrapUps.length)]}`;
+      }
+  
       return {
         aiResponse,
         shouldContinue: turnCount < 7,
         phase: turnCount < 2 ? 'intro' : turnCount < 6 ? 'practice' : 'feedback'
       };
     } catch (error) {
-      console.error('❌ Error generating response:', error);
-      return {
-        aiResponse: "Hmm, something went wrong. Let's try that again!",
-        shouldContinue: false,
-        phase: 'error'
-      };
+      console.error('❌ Error:', error);
+      throw error;
     }
-  }
+  }  
 }
 
 export default new CleanVoiceService();

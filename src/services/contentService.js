@@ -4,79 +4,7 @@
  */
 
 import responseEvaluationService from './responseEvaluationService.js';
-
-// ==================== BUILT-IN CURRICULUM DATA ====================
-
-const INTRODUCTION_SCRIPTS = {
-  'K-2': {
-    greeting: "Hi! I'm Cue, and I'm so excited to practice with you today!",
-    scenarios: {
-      'starting-conversation': {
-        intro: "Let's practice saying hello! Can you say hi to me?",
-        afterResponse: "Yay! Great job! You said hi! That's so nice! Now let's pretend I'm a new friend at school."
-      },
-      'making-friends': {
-        intro: "Let's practice making new friends! Can you say 'Hi, want to play?'",
-        afterResponse: "Wow! That was so friendly! You're doing great! Now I'll be a kid on the playground."
-      },
-      'paying-attention': {
-        intro: "Let's practice being a good listener! When I talk, you look at me and nod. Ready?",
-        afterResponse: "Perfect! You looked right at me! That's how we show we're listening! Now let's try it for real."
-      }
-    }
-  },
-  '3-5': {
-    greeting: "Hey there! I'm Cue, your practice coach!",
-    scenarios: {
-      'starting-conversation': {
-        intro: "Okay! Imagine you see someone new at recess. What could you say to start talking with them?",
-        afterResponse: "Nice! That's a friendly way to start. What else could you add to show you're interested? Let me be that new kid for a minute."
-      },
-      'making-friends': {
-        intro: "Picture this: there's a new student in your class. How would you introduce yourself and try to be friends?",
-        afterResponse: "Good thinking! You're being friendly and showing interest. Let's try this out - I'll be the new student."
-      },
-      'paying-attention': {
-        intro: "Let's practice being a really good listener. I'm going to tell you about my weekend, and you show me you're paying attention. Ready?",
-        afterResponse: "I could tell you were really listening! What did you do to show that? Great! Now let's practice with a real conversation."
-      }
-    }
-  },
-  '6-8': {
-    greeting: "Hi, I'm Cue.",
-    scenarios: {
-      'starting-conversation': {
-        intro: "Picture this: there's a new student sitting alone at lunch. How would you approach them and start a conversation?",
-        afterResponse: "That's a solid opener. It's friendly without being too intense. How would you keep the conversation going? Alright, let's run through this - I'll be the new student."
-      },
-      'making-friends': {
-        intro: "You've noticed someone in your class who seems cool and shares some of your interests. What's your approach for getting to know them better?",
-        afterResponse: "Good strategy! You're balancing friendliness with respect for their space. Let's try it out - I'll be that person."
-      },
-      'paying-attention': {
-        intro: "Imagine a friend is telling you about something important that happened to them. How do you show them you're really listening and you care?",
-        afterResponse: "Those are great active listening techniques! Which one do you think is most important? Cool! Let's practice - I'll tell you about something that happened."
-      }
-    }
-  },
-  '9-12': {
-    greeting: "Hi, I'm Cue.",
-    scenarios: {
-      'starting-conversation': {
-        intro: "You notice someone in your class who seems to share your interests. What's your strategy for initiating a conversation?",
-        afterResponse: "Thoughtful approach. You're balancing friendliness with respect for their space. What factors would influence your timing and tone? Let's try this - I'll be that person."
-      },
-      'making-friends': {
-        intro: "You want to expand your social circle and there's someone you'd like to get to know better. How do you build that connection authentically?",
-        afterResponse: "That shows social intelligence. You're being genuine rather than forced. How would you gauge their receptiveness? Let's run through this scenario."
-      },
-      'paying-attention': {
-        intro: "In a serious conversation, someone is sharing something personal with you. How do you demonstrate empathy and engagement through your listening?",
-        afterResponse: "Those are sophisticated listening skills. Which techniques do you find most effective in building trust? Let's practice this - I'll share something with you."
-      }
-    }
-  }
-};
+import { getVoiceIntro } from '../content/training/introduction-scripts.js';
 
 const WORD_LIMITS = {
   'K-2': 8,
@@ -120,7 +48,6 @@ const TIMING_RULES = {
 
 class StandaloneContentService {
   constructor() {
-    this.introScripts = INTRODUCTION_SCRIPTS;
     this.wordLimits = WORD_LIMITS;
     this.timingRules = TIMING_RULES;
     this.evaluationService = responseEvaluationService;
@@ -142,28 +69,6 @@ class StandaloneContentService {
   getTimingForGrade(gradeLevel) {
     const gradeKey = this.getGradeKey(gradeLevel);
     return this.timingRules[gradeKey];
-  }
-
-  getScenarioKey(scenarioTitle) {
-    const titleLower = (scenarioTitle || '').toLowerCase();
-    
-    if (titleLower.includes('start') && titleLower.includes('conversation')) {
-      return 'starting-conversation';
-    }
-    if (titleLower.includes('making') && titleLower.includes('friend')) {
-      return 'making-friends';
-    }
-    if (titleLower.includes('pay') && titleLower.includes('attention')) {
-      return 'paying-attention';
-    }
-    if (titleLower.includes('ask') && titleLower.includes('help')) {
-      return 'asking-help';
-    }
-    if (titleLower.includes('join') && titleLower.includes('group')) {
-      return 'joining-group';
-    }
-    
-    return 'starting-conversation';
   }
 
   determineNextPhase(currentPhase, exchangeCount) {
@@ -226,8 +131,7 @@ class StandaloneContentService {
         scenarioContext,
         gradeKey,
         wordLimit,
-        evaluation,
-        conversationHistory
+        evaluation
       );
     }
 
@@ -244,55 +148,35 @@ class StandaloneContentService {
    * Generate INTRO prompt - FIXED to not repeat!
    */
   generateIntroPrompt(gradeKey, scenario, role, wordLimit, conversationHistory = []) {
-    const gradeScripts = this.introScripts[gradeKey];
-    
-    if (!gradeScripts) {
-      return `You're Cue, a friendly coach for ${gradeKey} students. Say: "Hi! Let's practice ${scenario?.title}. I'll be ${role}. Ready?" Keep it under ${wordLimit} words.`;
+    const topicDescriptor =
+      scenario?.topicId || scenario?.topic || scenario?.title || scenario?.category || '';
+    const introData = getVoiceIntro(gradeKey, topicDescriptor, scenario);
+    const userMessages = conversationHistory.filter((m) => m.role === 'user').length;
+
+    if (userMessages === 0) {
+      const combinedIntro = `${introData.greetingIntro} ${introData.scenarioIntro} ${introData.safetyAndConsent}`
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      return `You are Cue, the Social Cue coach for ${gradeKey} students.
+
+INTRO EXCHANGE 1 of 2:
+
+Say: "${combinedIntro}"
+
+Keep it simple and warm. Stay under ${wordLimit} words.`;
     }
 
-    const scenarioKey = this.getScenarioKey(scenario?.title || scenario?.category);
-    const scenarioScript = gradeScripts.scenarios?.[scenarioKey];
-    
-    if (scenarioScript) {
-      // ✅ FIX: Check conversation history to determine which intro exchange
-      const userMessages = conversationHistory.filter(m => m.role === 'user').length;
-      
-      if (userMessages === 0) {
-        // FIRST exchange - use intro question
-        console.log('✅ Using curriculum INTRO (1/2) for:', scenarioKey);
-        
-        return `You are Cue, the Social Cue coach for ${gradeKey} students.
+    return `You are Cue, the Social Cue coach for ${gradeKey} students.
 
-INTRO EXCHANGE 1 of 2 - Ask the opening question:
+INTRO EXCHANGE 2 of 2:
 
-Say EXACTLY: "${scenarioScript.intro}"
+Say: "${introData.firstPrompt}"
 
-Keep it simple and warm. Wait for their response. Around ${wordLimit} words.`;
-      } else {
-        // SECOND exchange - use afterResponse
-        console.log('✅ Using curriculum AFTER-RESPONSE (2/2) for:', scenarioKey);
-        
-        return `You are Cue, the Social Cue coach for ${gradeKey} students.
-
-INTRO EXCHANGE 2 of 2 - Give the afterResponse and transition:
-
-Say: "${scenarioScript.afterResponse}"
-
-This prepares them for the practice where you'll become ${role}.
-
-Keep it warm and encouraging. Around ${wordLimit} words.`;
-      }
-    }
-    
-    console.log('📝 Using general intro for:', gradeKey);
-    return `You are Cue for ${gradeKey} students.
-
-Say: "${gradeScripts.greeting} Let's practice ${scenario?.title}. I'll be ${role}. Ready?"
-
-Keep it simple, warm, under ${wordLimit} words. When they're ready, start practice!`;
+Encourage them to respond so you can move into roleplay as ${role}. Keep it warm and under ${wordLimit} words.`;
   }
 
-  generatePracticePrompt(role, context, gradeKey, wordLimit, evaluation, history) {
+  generatePracticePrompt(role, context, gradeKey, wordLimit, evaluation) {
     const ageGuidance = this.getAgeGuidance(gradeKey);
     
     let prompt = `You're ${role} teaching conversation skills naturally.
@@ -304,7 +188,7 @@ ${ageGuidance}
 `;
 
     if (evaluation) {
-      prompt += this.generateTeachingStrategy(evaluation, gradeKey);
+      prompt += this.generateTeachingStrategy(evaluation);
     } else {
       prompt += `TEACH THROUGH DIALOGUE:
 - When they do well: continue naturally with enthusiasm
@@ -321,7 +205,7 @@ After 5-6 exchanges, wrap up: "Great job! You really showed [specific skill]!"`;
     return prompt;
   }
 
-  generateTeachingStrategy(evaluation, gradeKey) {
+  generateTeachingStrategy(evaluation) {
     const performance = evaluation.performanceLevel;
     
     let strategy = `ADAPTIVE TEACHING (Performance: ${performance}):\n\n`;
@@ -442,7 +326,7 @@ Example: "You did great! I noticed you [specific thing]. That's exactly how good
     };
   }
 
-  getHelpPrompt(type = 'gentle') {
+  getHelpPrompt() {
     const prompts = [
       "Take your time. What would you like to say?",
       "It's okay to pause and think. Your turn!",

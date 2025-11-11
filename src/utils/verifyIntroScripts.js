@@ -1,7 +1,11 @@
 // Run this with: node src/utils/verifyIntroScripts.js
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 console.log('🔍 Verifying introduction-scripts.js structure...\n');
 
@@ -10,13 +14,7 @@ try {
   const fileContent = fs.readFileSync(filePath, 'utf8');
 
   const gradeLevels = ['K-2', '3-5', '6-8', '9-12'];
-  const scenarios = [
-    'starting-conversation',
-    'making-friends',
-    'paying-attention',
-    'asking-help',
-    'joining-group'
-  ];
+  const requiredFields = ['greeting', 'introduction', 'safety', 'consent'];
 
   const issues = [];
   const successes = [];
@@ -32,19 +30,13 @@ try {
         ? fileContent.substring(gradeStart, gradeEnd)
         : fileContent.substring(gradeStart);
 
-      if (gradeSection.includes('scenarios:')) {
-        successes.push(`  ✅ ${grade} has scenarios object`);
-
-        scenarios.forEach((scenario) => {
-          if (gradeSection.includes(`'${scenario}':`)) {
-            successes.push(`    ✅ ${scenario} found`);
-          } else {
-            issues.push(`    ❌ ${grade} missing scenario: ${scenario}`);
-          }
-        });
-      } else {
-        issues.push(`  ❌ ${grade} missing scenarios object`);
-      }
+      requiredFields.forEach((field) => {
+        if (gradeSection.includes(`${field}:`)) {
+          successes.push(`    ✅ ${grade} has ${field}`);
+        } else {
+          issues.push(`    ❌ ${grade} missing field: ${field}`);
+        }
+      });
     } else {
       issues.push(`❌ Missing grade level: ${grade}`);
     }

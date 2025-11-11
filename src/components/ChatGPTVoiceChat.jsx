@@ -85,11 +85,20 @@ const ChatGPTVoiceChat = ({ scenario, gradeLevel = '6-8', onComplete, onClose })
 
   const speakIntro = async () => {
     try {
-      const introText = `Hi! I'm your practice buddy. Today we're going to practice ${scenario.title}. Are you ready to begin?`;
+      setIsSpeaking(true);
+      setError(null);
+
+      const aiIntroResponse = await CleanVoiceService.generateResponse({
+        conversationHistory: [],
+        scenario,
+        gradeLevel,
+        phase: 'intro'
+      });
+
+      const introText = aiIntroResponse?.aiResponse || `Hey! Let's practice ${scenario?.title || 'conversation skills'}. Ready?`;
       const introMessage = { role: 'assistant', content: introText };
       setMessages([introMessage]);
 
-      setIsSpeaking(true);
       const audioUrl = await textToSpeechElevenLabs(introText, gradeLevel);
       const audio = new Audio(audioUrl);
       audioRef.current = audio;

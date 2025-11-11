@@ -1,10 +1,21 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Sparkles, ArrowRight, Lightbulb, Clock, BookOpen, Brain, ChevronLeft } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  getScenariosByGrade,
-  getScenarioForGrade,
-  normalizeGradeLevel
+  Sparkles,
+  Loader,
+  ArrowRight,
+  Lightbulb,
+  RefreshCw,
+  ChevronLeft,
+  Clock,
+  BookOpen,
+  Brain
+} from 'lucide-react';
+import {
+  topics,
+  getGradeBandFromGrade,
+  generateScenarioForTopic
 } from '../data/voicePracticeScenarios';
+import { useLocation } from 'react-router-dom';
 
 const LoadingView = ({ onBack }) => (
   <div className="min-h-screen bg-black text-white flex items-center justify-center relative">
@@ -22,11 +33,12 @@ const LoadingView = ({ onBack }) => (
         <div className="w-20 h-20 mx-auto mb-4 relative">
           <div className="absolute inset-0 border-4 border-blue-500/20 rounded-full" />
           <div className="absolute inset-0 border-4 border-transparent border-t-blue-500 rounded-full animate-spin" />
-          <Sparkles className="w-8 h-8 text-yellow-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+          <Loader className="w-10 h-10 text-blue-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-spin" />
+          <Sparkles className="w-6 h-6 text-yellow-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
         </div>
       </div>
-      <h2 className="text-2xl font-bold mb-4 text-white">🎨 Creating fun questions just for you...</h2>
-      <p className="text-lg text-gray-400 mb-2">AI is crafting personalized scenarios</p>
+      <h2 className="text-2xl font-bold mb-4 text-white">Creating a fresh scenario...</h2>
+      <p className="text-lg text-gray-400 mb-2">AI is crafting a topic-specific practice flow.</p>
       <p className="text-sm text-gray-500">This will only take a moment!</p>
     </div>
   </div>
@@ -51,7 +63,7 @@ const ErrorView = ({ message, onBack, onRetry }) => (
           onClick={onRetry}
           className="bg-gradient-to-r from-blue-500 to-emerald-400 text-white px-6 py-3 rounded-full font-bold inline-flex items-center gap-2 mx-auto"
         >
-          <ArrowRight className="w-4 h-4" />
+          <RefreshCw className="w-4 h-4" />
           Try Again
         </button>
       )}
@@ -61,66 +73,108 @@ const ErrorView = ({ message, onBack, onRetry }) => (
 
 export default function AIPracticeSession({
   gradeLevel = '6-8',
+  selectedTopicId,
   onBack,
   onStartScenario
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [scenarios, setScenarios] = useState([]);
-  const [selectedScenario, setSelectedScenario] = useState(null);
+  const [activeTopic, setActiveTopic] = useState(null);
+  const [generatedScenario, setGeneratedScenario] = useState(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const location = useLocation();
 
-  const normalizedGrade = useMemo(() => normalizeGradeLevel(gradeLevel), [gradeLevel]);
+  const numericGrade = useMemo(() => {
+    const locationGrade = location?.state?.grade ?? location?.state?.gradeLevel ?? null;
+    const source = locationGrade ?? gradeLevel;
+
+    if (typeof source === 'number') {
+      return source;
+    }
+
+    if (typeof source === 'string') {
+      if (source.includes('-')) {
+        const [start] = source.split('-');
+        const parsedRangeGrade = parseInt(start, 10);
+        if (!Number.isNaN(parsedRangeGrade)) return parsedRangeGrade;
+      }
+
+      const parsed = parseInt(source, 10);
+      if (!Number.isNaN(parsed)) return parsed;
+    }
+
+    return 6;
+  }, [gradeLevel, location?.state]);
+
+  const gradeBand = useMemo(() => getGradeBandFromGrade(numericGrade), [numericGrade]);
+  const locationTopicId = location?.state?.topicId ?? null;
+  const topicIdToUse = selectedTopicId ?? locationTopicId ?? null;
 
   useEffect(() => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const gradeScenarios = getScenariosByGrade(normalizedGrade);
-
-      if (!Array.isArray(gradeScenarios) || gradeScenarios.length === 0) {
-        setScenarios([]);
-        setSelectedScenario(null);
-        setError('No practice scenarios available for this grade yet.');
-      } else {
-        setScenarios(gradeScenarios);
-        const initialScenario = getScenarioForGrade(gradeScenarios[0].id, normalizedGrade);
-        setSelectedScenario(initialScenario);
-      }
-    } catch (err) {
-      console.error('❌ Failed to load voice practice scenarios:', err);
-      setError('Unable to load voice practice scenarios. Please try again later.');
-    } finally {
+    if (!topicIdToUse) {
+      setError('No topic selected. Please choose one.');
+      setGeneratedScenario(null);
+      setActiveTopic(null);
       setLoading(false);
+      return;
     }
-  }, [normalizedGrade]);
 
-  const handleScenarioSelect = (scenario) => {
-    const gradeSpecificScenario = getScenarioForGrade(scenario.id, normalizedGrade);
-    setSelectedScenario(gradeSpecificScenario);
+    const loadScenario = () => {
+      setLoading(true);
+      try {
+        const topic = topics.find((t) => t.id === topicIdToUse);
+        if (!topic) {
+          setError('We could not find that practice topic.');
+          setActiveTopic(null);
+          setGeneratedScenario(null);
+          return;
+        }
+
+        setActiveTopic(topic);
+        const scenario = generateScenarioForTopic(topic.id, numericGrade);
+        setGeneratedScenario(scenario);
+        setError(null);
+      } catch (err) {
+        console.error('❌ Failed to generate scenario:', err);
+        setError('Unable to generate a scenario right now. Please try again.');
+        setGeneratedScenario(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadScenario();
+  }, [topicIdToUse, numericGrade]);
+
+  const regenerateScenario = useCallback(() => {
+    if (!activeTopic) return;
+    setIsGenerating(true);
+    setTimeout(() => {
+      const scenario = generateScenarioForTopic(activeTopic.id, numericGrade);
+      setGeneratedScenario(scenario);
+      setIsGenerating(false);
+    }, 150);
+  }, [activeTopic, numericGrade]);
+
+  const handleStartPractice = () => {
+    if (!generatedScenario || typeof onStartScenario !== 'function') return;
+    onStartScenario({
+      scenario: generatedScenario,
+      gradeLevel: String(numericGrade),
+      gradeBand
+    });
   };
 
-  const handleStart = () => {
-    if (!selectedScenario) return;
-
-    if (typeof onStartScenario === 'function') {
-      onStartScenario(selectedScenario);
-    } else {
-      console.log('🎯 Voice scenario selected:', selectedScenario);
-      alert('Voice practice is coming soon!');
-    }
-  };
-
-  if (loading) {
-    return <LoadingView onBack={onBack} />;
-  }
-
-  if (error) {
-    return <ErrorView message={error} onBack={onBack} onRetry={null} />;
-  }
-
-  if (!scenarios.length) {
-    return <ErrorView message="No practice scenarios found." onBack={onBack} onRetry={null} />;
+  if (loading) return <LoadingView onBack={onBack} />;
+  if (error) return <ErrorView message={error} onBack={onBack} onRetry={regenerateScenario} />;
+  if (!generatedScenario) {
+    return (
+      <ErrorView
+        message="We couldn’t generate a scenario for this topic."
+        onBack={onBack}
+        onRetry={regenerateScenario}
+      />
+    );
   }
 
   return (
@@ -135,126 +189,95 @@ export default function AIPracticeSession({
         </button>
       )}
 
-      <div className="max-w-6xl mx-auto px-6 py-20">
-        <div className="mb-12">
+      <div className="max-w-5xl mx-auto px-6 py-20 space-y-10">
+        <div className="mb-4">
           <div className="inline-flex items-center gap-3 text-yellow-400 uppercase tracking-wide text-sm font-semibold">
             <Sparkles className="w-4 h-4" />
-            Voice Practice Library · Grade {normalizedGrade.toUpperCase()}
+            Voice Practice · Grade {gradeBand}
           </div>
-          <h1 className="mt-4 text-4xl md:text-5xl font-bold">Choose a scenario to practice</h1>
-          <p className="mt-3 text-gray-400 max-w-2xl">
-            Select a topic below to see the scenario details, learning objectives, and practice prompts tailored to your grade level.
-          </p>
+          <h1 className="mt-2 text-4xl font-bold">
+            {activeTopic?.title || 'Choose a topic to practice'}
+          </h1>
+          {activeTopic?.description && (
+            <p className="mt-3 text-gray-400 max-w-2xl">{activeTopic.description}</p>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[320px,1fr] gap-8">
-          <div className="space-y-3">
-            {scenarios.map((scenario) => {
-              const gradeScenario = getScenarioForGrade(scenario.id, normalizedGrade);
-              const isActive = selectedScenario?.id === scenario.id;
+        <div className="bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur space-y-6">
+          <div className="inline-flex items-center gap-2 text-xs uppercase tracking-wide text-blue-300">
+            <Lightbulb className="w-4 h-4" />
+            Topic-Specific Scenario
+          </div>
+          <h2 className="text-3xl font-bold text-white">{generatedScenario.title}</h2>
+          <p className="text-gray-300 text-base">{generatedScenario.contextLine}</p>
 
-              return (
-                <button
-                  key={scenario.id}
-                  onClick={() => handleScenarioSelect(scenario)}
-                  className={`w-full text-left p-5 rounded-2xl border transition-all duration-200 flex items-start gap-4 ${
-                    isActive
-                      ? 'bg-gradient-to-r from-blue-500/30 via-purple-500/20 to-emerald-500/20 border-blue-500/50 shadow-lg shadow-blue-500/20'
-                      : 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/10'
-                  }`}
-                >
-                  <div className="text-3xl">
-                    {gradeScenario?.icon || scenario.icon || '🎤'}
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold mb-1">
-                      {gradeScenario?.title || scenario.title[normalizedGrade]}
-                    </h3>
-                    <p className="text-sm text-gray-400">
-                      {gradeScenario?.description || scenario.description[normalizedGrade]}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
+                <Clock className="w-4 h-4" />
+                Estimated Time
+              </div>
+              <p className="mt-2 text-lg font-semibold text-white">
+                {generatedScenario.estimatedDuration || 5} minutes
+              </p>
+            </div>
+
+            <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+              <div className="flex items-center gap-2 text-sm font-semibold text-blue-300">
+                <BookOpen className="w-4 h-4" />
+                Practice Partner
+              </div>
+              <p className="mt-2 text-lg font-semibold text-white">
+                {generatedScenario.characterRole || 'Coach Cue'}
+              </p>
+            </div>
           </div>
 
-          <div className="bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur">
-            {!selectedScenario ? (
-              <div className="text-center text-gray-400">
-                Select a scenario on the left to view practice details.
+          <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
+            <div className="text-sm font-semibold text-amber-300 mb-2">Warm-up Question</div>
+            <p className="text-gray-200 leading-relaxed">
+              {generatedScenario.warmupQuestion || generatedScenario.prompt}
+            </p>
+          </div>
+
+          <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
+            <div className="text-sm font-semibold text-purple-300 mb-2">Coach Tip</div>
+            <p className="text-gray-200 leading-relaxed">{generatedScenario.guidance}</p>
+          </div>
+
+          {generatedScenario.learningObjectives?.length > 0 && (
+            <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
+              <div className="flex items-center gap-2 text-sm font-semibold text-purple-300 mb-3">
+                <Brain className="w-4 h-4" />
+                Learning Objectives
               </div>
-            ) : (
-              <div className="space-y-6">
-                <div>
-                  <div className="inline-flex items-center gap-2 text-xs uppercase tracking-wide text-blue-300">
-                    <span>{selectedScenario.category?.replace(/-/g, ' ')}</span>
-                  </div>
-                  <h2 className="mt-2 text-3xl font-bold text-white">
-                    {selectedScenario.title}
-                  </h2>
-                  <p className="mt-3 text-gray-300 text-base">
-                    {selectedScenario.description}
-                  </p>
-                </div>
+              <ul className="space-y-2 text-sm text-gray-200">
+                {generatedScenario.learningObjectives.map((objective, index) => (
+                  <li key={`${generatedScenario.id}-objective-${index}`} className="flex gap-2">
+                    <span className="text-blue-300">•</span>
+                    <span>{objective}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
-                      <Clock className="w-4 h-4" />
-                      Estimated Time
-                    </div>
-                    <p className="mt-2 text-lg font-semibold text-white">
-                      {selectedScenario.estimatedDuration || 5} minutes
-                    </p>
-                  </div>
-
-                  <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-blue-300">
-                      <BookOpen className="w-4 h-4" />
-                      Practice Partner
-                    </div>
-                    <p className="mt-2 text-lg font-semibold text-white">
-                      {selectedScenario.characterRole || 'Coach Cue'}
-                    </p>
-                  </div>
-                </div>
-
-                {selectedScenario.learningObjectives?.length > 0 && (
-                  <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-purple-300 mb-3">
-                      <Brain className="w-4 h-4" />
-                      Learning Objectives
-                    </div>
-                    <ul className="space-y-2 text-sm text-gray-200">
-                      {selectedScenario.learningObjectives.map((objective, index) => (
-                        <li key={`${selectedScenario.id}-objective-${index}`} className="flex gap-2">
-                          <span className="text-blue-300">•</span>
-                          <span>{objective}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {selectedScenario.setupPrompt && (
-                  <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
-                    <div className="text-sm font-semibold text-amber-300 mb-2">Voice Coach Prompt</div>
-                    <p className="text-gray-200 leading-relaxed">
-                      {selectedScenario.setupPrompt}
-                    </p>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleStart}
-                  className="w-full mt-4 bg-gradient-to-r from-blue-500 to-emerald-400 text-white font-bold py-4 px-6 rounded-full flex items-center justify-center gap-2 hover:shadow-lg transition-all"
-                >
-                  Start Voice Practice
-                  <ArrowRight className="w-5 h-5" />
-                </button>
-              </div>
-            )}
+          <div className="flex flex-col md:flex-row gap-3">
+            <button
+              onClick={regenerateScenario}
+              disabled={isGenerating}
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:border-white/40 disabled:opacity-60"
+            >
+              <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
+              {isGenerating ? 'Generating...' : 'Generate another scenario'}
+            </button>
+            <button
+              onClick={handleStartPractice}
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-emerald-400 px-6 py-3 font-semibold text-white shadow-lg shadow-blue-500/30 transition hover:opacity-90"
+            >
+              Start Practice
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
