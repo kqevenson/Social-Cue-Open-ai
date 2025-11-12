@@ -1,24 +1,34 @@
-import OpenAI from 'openai';
+const CHAT_ENDPOINT = "/api/chat";
 
-const apiKey = (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_OPENAI_API_KEY) || process.env.OPENAI_API_KEY;
-
-const openai = new OpenAI({
-  apiKey,
-  dangerouslyAllowBrowser: true
-});
+const DEFAULT_OPTIONS = {
+  model: "gpt-4o-mini",
+  temperature: 0.8,
+  max_tokens: 120
+};
 
 export async function generateResponse({ conversationHistory = [], scenario = {}, gradeLevel = '6', phase = 'intro' }) {
   const messages = buildPrompt(conversationHistory, scenario, gradeLevel, phase);
 
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages,
-    temperature: 0.8,
-    max_tokens: 120
+  const response = await fetch(CHAT_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      messages,
+      ...DEFAULT_OPTIONS
+    })
   });
 
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Chat proxy failed: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+
   return {
-    aiResponse: response.choices?.[0]?.message?.content?.trim() || '',
+    aiResponse: data?.choices?.[0]?.message?.content?.trim() || '',
     phase,
     shouldContinue: true
   };
@@ -76,3 +86,5 @@ function gradeLevelToBand(grade) {
   if (num <= 8) return '6-8';
   return '9-12';
 }
+
+

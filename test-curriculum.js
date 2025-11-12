@@ -5,3 +5,5 @@ console.log('3-5 lessons:', curriculum.getTotalLessons('3-5'));
 console.log('6-8 lessons:', curriculum.getTotalLessons('6-8'));
 console.log('9-12 lessons:', curriculum.getTotalLessons('9-12'));
 
+
+

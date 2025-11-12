@@ -40,7 +40,8 @@ class CleanVoiceService {
     scenario = {},
     gradeLevel = '6',
     persona = 'friendly',
-    toneHint = null
+    toneHint = null,
+    phase = null
   }) {
     const gradeString = (() => {
       if (gradeLevel == null) return '6';
@@ -57,6 +58,44 @@ class CleanVoiceService {
         (m) => m?.role === 'user' && ((m?.text ?? '').trim() || (m?.content ?? '').trim())
       ).length
     );
+    const resolvedPhase = (typeof phase === 'string' && phase.length > 0)
+      ? phase
+      : turnCount === 0
+        ? 'intro'
+        : turnCount < 5
+          ? 'practice'
+          : 'feedback';
+    const normalizedPhase = (() => {
+      if (!resolvedPhase) return 'practice';
+      const key = resolvedPhase.toLowerCase();
+      if (
+        key === 'demonstrate' ||
+        key === 'guided-repetition' ||
+        key === 'scenario-practice' ||
+        key === 'variation'
+      ) {
+        return 'practice';
+      }
+      if (key === 'masterycheck' || key === 'mastery-check') {
+        return 'feedback';
+      }
+      return resolvedPhase;
+    })();
+    console.log('[PHASE DEBUG]', {
+      resolvedPhase,
+      passedPhase: phase,
+      turnCount,
+      normalizedPhase,
+      historyLength: conversationHistory.length,
+      recentUserMessages: conversationHistory
+        .filter((m) => m?.role === 'user')
+        .map((m) => m?.text || m?.content)
+    });
+    console.debug('[CleanVoiceService] Phase selection:', {
+      requestedPhase: phase,
+      resolvedPhase: normalizedPhase,
+      userTurns: turnCount
+    });
   
     const gradePrompts = {
       'K': 'Use very short, kind sentences. Imagine you’re talking to a kindergartener.',
@@ -80,10 +119,13 @@ class CleanVoiceService {
       scenario?.topicId || scenario?.topic || scenario?.topicTitle || scenario?.title || '';
 
     const introConfig = getVoiceIntro(gradeString, topicDescriptor, scenario);
+    if (!introConfig || typeof introConfig !== 'object') {
+      console.warn('[WARN] Missing or invalid introConfig for', { gradeString, topicDescriptor, scenario });
+    }
     const baseIntroScriptParts = [
-      introConfig.greetingIntro,
-      introConfig.scenarioIntro,
-      introConfig.safetyAndConsent
+      introConfig?.greetingIntro,
+      introConfig?.scenarioIntro,
+      introConfig?.safetyAndConsent
     ].filter(Boolean);
     const baseIntroScript = baseIntroScriptParts.length
       ? baseIntroScriptParts.join(' ')
@@ -125,46 +167,81 @@ class CleanVoiceService {
   
     let systemPrompt = baseIdentity;
   
-    if (turnCount === 0) {
+    if (normalizedPhase === 'intro') {
+      console.debug('[INTRO] Intro phase triggered. Base script:', baseIntroScript);
       const introGuidance = baseIntroScript
         ? `Use the following base script as your source material. Paraphrase naturally while preserving each part in order. Base script: """${baseIntroScript}"""`
         : 'Provide a warm greeting, explain who you are, reassure them it is safe to practice, and ask for their readiness.';
-  
+
       const closingQuestion = introConfig.firstPrompt
         ? `Finish with a short question similar to: "${introConfig.firstPrompt}"`
         : 'Finish with a short question that invites them to respond.';
-  
-      systemPrompt = baseIntroScript
-        ? `${baseIdentity}
+
+      if (turnCount === 0) {
+        systemPrompt = baseIntroScript
+          ? `${baseIdentity}
   You must deliver a warm paraphrase of this intro script: "${baseIntroScript}".
   After that, ask a short question like: "${introConfig.firstPrompt || 'Ready to try it with me?'}".
   Keep it to two sentences total.`
-        : `${baseIdentity}
+          : `${baseIdentity}
   ${scenarioContext}
   ${introGuidance}
   ${closingQuestion}`;
-    } else if (turnCount === 1) {
-      const learnerResponse = conversationHistory.at(-1)?.content ||
-        conversationHistory.at(-1)?.text || '';
-      const topicLine = introConfig.scenarioIntro || `We’re focusing on ${topicDescriptor || 'this social skill'}.`;
+      } else {
+        const learnerResponse =
+          conversationHistory
+            .filter((msg) => msg?.role === 'user')
+            .at(-1)?.content ||
+          conversationHistory
+            .filter((msg) => msg?.role === 'user')
+            .at(-1)?.text ||
+          '';
 
-      const followupGuidance = `The learner just said: "${learnerResponse}". Respond with encouragement, reference ${topicLine}, and invite them to try it with you.`;
+        const topicLine =
+          introConfig.scenarioIntro ||
+          `We’re focusing on ${topicDescriptor || 'this social skill'}.`;
 
-      systemPrompt = `${baseIdentity}
+        const followupGuidance = `The learner just said: "${learnerResponse}". Respond with encouragement, reference ${topicLine}, and invite them to try it with you.`;
+
+        systemPrompt = `${baseIdentity}
  ${scenarioContext}
  ${followupGuidance}
  Keep the tone supportive and conversational. Share 1–2 concrete suggestions and end with a question that keeps the learner engaged.`;
-    } else if (turnCount >= 2 && turnCount <= 5) {
-      systemPrompt = `${baseIdentity}
+      }
+    } else if (normalizedPhase === 'practice') {
+      const learnerResponse =
+        conversationHistory
+          .filter((msg) => msg?.role === 'user')
+          .at(-1)?.content ||
+        conversationHistory
+          .filter((msg) => msg?.role === 'user')
+          .at(-1)?.text ||
+        '';
+
+      if (turnCount <= 1) {
+        const topicLine =
+          introConfig.scenarioIntro ||
+          `We’re focusing on ${topicDescriptor || 'this social skill'}.`;
+        const followupGuidance = `The learner just said: "${learnerResponse}". Respond with encouragement, reference ${topicLine}, and invite them to try it with you.`;
+
+        systemPrompt = `${baseIdentity}
+ ${scenarioContext}
+ ${followupGuidance}
+ Keep the tone supportive and conversational. Share 1–2 concrete suggestions and end with a question that keeps the learner engaged.`;
+      } else {
+        systemPrompt = `${baseIdentity}
  You're roleplaying as a realistic peer practicing ${topicDescriptor || 'this skill'}. React to what the learner said in one short sentence (under 15 words) and keep the scene going.`;
+      }
     } else {
       systemPrompt = `${baseIdentity}
   Wrap up the practice with specific praise and one friendly suggestion for next time. Keep it under 20 words.`;
     }
   
+    const includeFewShot = turnCount >= 2 && normalizedPhase !== 'intro';
+
     const messages = [
       { role: 'system', content: systemPrompt },
-      ...(turnCount >= 2 ? fewShot : []),
+      ...(includeFewShot ? fewShot : []),
       ...conversationHistory
         .filter(msg => (msg?.text || msg?.content || '').trim())
         .map(msg => ({
@@ -172,7 +249,9 @@ class CleanVoiceService {
           content: (msg?.text || msg?.content || '').trim()
         }))
     ];
-  
+ 
+    console.log('[DEBUG] Sending to OpenAI:', messages);
+
     try {
       const response = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
@@ -182,7 +261,8 @@ class CleanVoiceService {
       });
   
       let aiResponse = response.choices[0]?.message?.content?.trim() || '';
-  
+      console.log('[✅ AI Intro Response]', { phase: normalizedPhase, aiResponse });
+ 
       const wrapUps = [
         "You stayed confident—awesome job!",
         "Nice work using friendly words!",
@@ -197,8 +277,8 @@ class CleanVoiceService {
   
       return {
         aiResponse,
-        shouldContinue: turnCount < 7,
-        phase: turnCount < 2 ? 'intro' : turnCount < 6 ? 'practice' : 'feedback'
+        shouldContinue: normalizedPhase !== 'feedback',
+        phase: normalizedPhase
       };
     } catch (error) {
       console.error('❌ Error:', error);

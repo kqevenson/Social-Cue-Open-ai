@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Home, Target, TrendingUp, Settings, BookOpen, User, BarChart3, Star } from 'lucide-react';
 import { getUserData, saveUserData } from './socialcue/utils/storage';
-import { lessonApiService } from '../services/lessonApi';
 import { ToastProvider, ErrorBoundary } from './socialcue/animations';
 import HomeScreen from './socialcue/HomeScreen';
-import PracticeScreen from "./socialcue/PracticeScreen";
+import PracticeSession from './socialcue/PracticeSession';
+import PracticeScreen from './socialcue/PracticeScreen';
 
 import ProgressScreen from './socialcue/ProgressScreen';
 import SettingsScreen from './socialcue/SettingsScreen';
@@ -16,8 +16,6 @@ import LessonsScreen from './socialcue/LessonsScreen';
 import LearningPreferencesScreen from './socialcue/LearningPreferencesScreen';
 import GoalsScreen from './socialcue/GoalsScreen';
 import BottomNav from './socialcue/BottomNav';
-import ElevenLabsVoiceOrb from './ElevenLabsVoiceOrb';
-import { getTimingForGrade } from '../content/training/aibehaviorconfig';
 
 function SocialCueApp({ onLogout }) {
   const [currentScreen, setCurrentScreen] = useState('home');
@@ -28,13 +26,47 @@ function SocialCueApp({ onLogout }) {
   const [notifications, setNotifications] = useState(true);
   const [sessionId, setSessionId] = useState(1);
   const [selectedChildId, setSelectedChildId] = useState(null);
-  const [pendingPracticeScenarioId, setPendingPracticeScenarioId] = useState(null);
-  const [selectedPracticeTopicId, setSelectedPracticeTopicId] = useState(null);
-  const [showVoicePractice, setShowVoicePractice] = useState(false);
-  const [currentVoiceScenario, setCurrentVoiceScenario] = useState(null);
-  const [voiceScenarioGradeLevel, setVoiceScenarioGradeLevel] = useState(null);
-  const [newGoalsCount, setNewGoalsCount] = useState(0);
   
+  // Calculate new goals count (goals created in the last 5 minutes)
+  const getNewGoalsCount = () => {
+    try {
+      const goals = JSON.parse(localStorage.getItem('socialcue_goals') || '[]');
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      
+      return goals.filter(goal => {
+        const createdAt = new Date(goal.createdAt);
+        return createdAt > fiveMinutesAgo && goal.status === 'active';
+      }).length;
+    } catch (error) {
+      console.error('Error calculating new goals count:', error);
+      return 0;
+    }
+  };
+
+  const newGoalsCount = getNewGoalsCount();
+
+  // Role-based navigation items
+  const getNavigationItems = (userRole) => {
+    if (userRole === 'parent') {
+      // Parent sees simplified nav with parent-specific icons
+      return [
+        { id: 'home', label: 'My Child', icon: User },
+        { id: 'progress', label: 'Reports', icon: BarChart3 },
+        { id: 'settings', label: 'Settings', icon: Settings }
+      ];
+    } else {
+      // Learner sees full nav
+      return [
+        { id: 'home', label: 'Home', icon: Home },
+        { id: 'lessons', label: 'Lessons', icon: BookOpen },
+        { id: 'practice', label: 'Practice', icon: Target },
+        { id: 'goals', label: 'Goals', icon: Star },
+        { id: 'progress', label: 'Progress', icon: TrendingUp },
+        { id: 'settings', label: 'Settings', icon: Settings }
+      ];
+    }
+  };
+
   useEffect(() => {
     const data = getUserData();
     console.log('SocialCueApp loaded userData:', data);
@@ -64,45 +96,6 @@ function SocialCueApp({ onLogout }) {
     const savedNotifications = localStorage.getItem('notifications');
     if (savedNotifications !== null) setNotifications(savedNotifications === 'true');
   }, []);
-
-  useEffect(() => {
-    const calculateNewGoalsCount = () => {
-      try {
-        const goals = JSON.parse(localStorage.getItem('socialcue_goals') || '[]');
-        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-
-        const recentGoals = goals.filter((goal) => {
-          const createdAt = new Date(goal.createdAt);
-          return createdAt > fiveMinutesAgo && goal.status === 'active';
-        });
-
-        setNewGoalsCount(recentGoals.length);
-      } catch (error) {
-        console.error('Error calculating new goals count:', error);
-        setNewGoalsCount(0);
-      }
-    };
-
-    calculateNewGoalsCount();
-
-    const handleStorage = (event) => {
-      if (!event || event.key === 'socialcue_goals') {
-        calculateNewGoalsCount();
-      }
-    };
-
-    window.addEventListener('storage', handleStorage);
-    return () => {
-      window.removeEventListener('storage', handleStorage);
-    };
-  }, [userData, currentScreen]);
-
-  useEffect(() => {
-    const segments = location.pathname.split('/').filter(Boolean);
-    if (segments[0] === 'practice') {
-      setCurrentScreen('practiceHome');
-    }
-  }, [location.pathname]);
 
   const checkAndInitializeAdaptiveLearning = async (userId, userData) => {
     try {
@@ -165,25 +158,6 @@ function SocialCueApp({ onLogout }) {
     }
   };
 
-  const getNavigationItems = (userRole) => {
-    if (userRole === 'parent') {
-      return [
-        { id: 'home', label: 'My Child', icon: User },
-        { id: 'progress', label: 'Reports', icon: BarChart3 },
-        { id: 'settings', label: 'Settings', icon: Settings }
-      ];
-    }
-
-    return [
-      { id: 'home', label: 'Home', icon: Home },
-      { id: 'lessons', label: 'Lessons', icon: BookOpen },
-      { id: 'practice', label: 'Practice', icon: Target },
-      { id: 'goals', label: 'Goals', icon: Star },
-      { id: 'progress', label: 'Progress', icon: TrendingUp },
-      { id: 'settings', label: 'Settings', icon: Settings }
-    ];
-  };
-
   const toggleDarkMode = (value) => {
     setDarkMode(value);
     localStorage.setItem('darkMode', value.toString());
@@ -204,34 +178,15 @@ function SocialCueApp({ onLogout }) {
     localStorage.setItem('notifications', value.toString());
   };
 
-  const handleNavigate = (screen, sid, options = {}) => {
-    console.log('🧭 Navigating to:', screen, sid ? `with sessionId: ${sid}` : '(no sessionId provided)');
+  const handleNavigate = (screen, sid) => {
+    console.log('🧭 Navigating to:', screen, sid ? `with sessionId: ${sid}` : '');
     setCurrentScreen(screen);
-
-    if (screen === 'practice' && options.practiceScenarioId) {
-      setPendingPracticeScenarioId(options.practiceScenarioId);
-    } else if (screen !== 'practice') {
-      setPendingPracticeScenarioId(null);
-    }
-
-    if (screen === 'practice' && options.topicId) {
-      setSelectedPracticeTopicId(options.topicId);
-    } else if (screen !== 'practice') {
-      setSelectedPracticeTopicId(null);
-    }
-    
-    let nextSessionId = sid;
-    if (screen === 'practice' && (!nextSessionId || Number.isNaN(Number(nextSessionId)))) {
-      console.log('⚠️ No sessionId provided, defaulting to 1');
-      nextSessionId = 1;
-    }
-
-    if (nextSessionId) {
-      const numericSessionId = Number(nextSessionId);
-      setSessionId(numericSessionId);
+    if (sid) {
+      setSessionId(sid);
+      // Set topicName based on sessionId
       const topicMap = {
         1: 'Small Talk Basics',
-        2: 'Active Listening',
+        2: 'Active Listening', 
         3: 'Reading Body Language',
         4: 'Building Confidence',
         5: 'Conflict Resolution',
@@ -239,35 +194,18 @@ function SocialCueApp({ onLogout }) {
         7: 'Empathy',
         8: 'Assertiveness'
       };
-      const topicName = options.topicNameOverride || topicMap[numericSessionId] || 'Social Skills';
-
-      const currentData = getUserData() || {};
+      const topicName = topicMap[sid] || 'Social Skills';
+      
+      // Update user data with topicName
+      const currentData = getUserData();
       const updatedData = { ...currentData, topicName };
       saveUserData(updatedData);
       setUserData(updatedData);
     } else {
+      // Reload user data when navigating (but preserve topicName if it exists)
       const data = getUserData();
       setUserData(data);
     }
-  };
-
-  const handleStartVoicePractice = ({ scenario, gradeLevel, gradeBand }) => {
-    console.log('🎤 Starting voice practice with:', { scenario, gradeLevel, gradeBand });
-
-    if (!scenario) return;
-
-    const resolvedGradeLevel = gradeLevel ?? scenario?.gradeLevel ?? userData?.gradeLevel ?? userData?.grade ?? '6';
-
-    setCurrentVoiceScenario({ ...scenario, gradeBand });
-    setVoiceScenarioGradeLevel(resolvedGradeLevel);
-    setShowVoicePractice(true);
-  };
-
-  const handleCloseVoicePractice = () => {
-    console.log('🎤 Closing voice practice');
-    setShowVoicePractice(false);
-    setCurrentVoiceScenario(null);
-    setVoiceScenarioGradeLevel(null);
   };
 
   const navItems = getNavigationItems(userData?.role);
@@ -308,53 +246,50 @@ function SocialCueApp({ onLogout }) {
         )}
         
         {/* Practice Session - only for learners */}
-        {currentScreen === 'practice' && userData?.role !== 'parent' && (
-          sessionId ? (
-            <ErrorBoundary darkMode={darkMode} onNavigate={handleNavigate}>
-              <AIPracticeSession
-                sessionId={sessionId}
-                selectedTopicId={selectedPracticeTopicId}
-                onNavigate={handleNavigate}
-                onComplete={(data) => {
-                  console.log('Session completed!', data);
-                  handleNavigate('progress');
-                  setSessionId(null);
-                  setPendingPracticeScenarioId(null);
-                  setSelectedPracticeTopicId(null);
-                }}
-                onExit={() => {
-                  console.log('Session exited');
-                  handleNavigate('home');
-                  setSessionId(null);
-                  setPendingPracticeScenarioId(null);
-                  setSelectedPracticeTopicId(null);
-                }}
-                darkMode={darkMode}
-                gradeLevel={userData.grade || '5'}
-                soundEffects={soundEffects}
-                autoReadText={autoReadText}
-                topicName={userData.topicName}
-                initialScenarioId={pendingPracticeScenarioId}
-                onStartScenario={handleStartVoicePractice}
-              />
-            </ErrorBoundary>
-          ) : (
-            <div className="min-h-[50vh] flex items-center justify-center text-center text-gray-400">
-              No session selected. Please choose a practice session from the Practice screen.
-            </div>
-          )
+        {currentScreen === 'practice' && sessionId && userData?.role !== 'parent' && (
+          <ErrorBoundary darkMode={darkMode} onNavigate={handleNavigate}>
+            <PracticeSession 
+              sessionId={sessionId} 
+              onNavigate={handleNavigate}
+              onComplete={(data) => {
+                console.log('Session completed!', data);
+                handleNavigate('progress');
+                setSessionId(null);
+              }}
+              onExit={() => {
+                console.log('Session exited');
+                handleNavigate('home');
+                setSessionId(null);
+              }}
+              darkMode={darkMode} 
+              gradeLevel={userData.grade || "5"} 
+              soundEffects={soundEffects}
+              autoReadText={autoReadText}
+              topicName={userData.topicName}
+            />
+          </ErrorBoundary>
         )}
         
         {/* Practice Home - only for learners */}
         {currentScreen === 'practiceHome' && userData?.role !== 'parent' && (
-          <PracticeScreen
-            onNavigate={handleNavigate}
-            darkMode={darkMode}
-            gradeLevel={userData?.grade || userData?.gradeLevel || '5'}
-            onBack={() => handleNavigate('home')}
+          <PracticeScreen 
+            onNavigate={handleNavigate} 
+            darkMode={darkMode} 
           />
         )}
         
+        {currentScreen === 'ai-practice' && (
+          <AIPracticeSession 
+            gradeLevel={userData.gradeLevel || "6-8"} 
+            onBack={() => handleNavigate('home')}
+            onStartScenario={() => {
+              handleNavigate('practice');
+              setSessionId(null);
+            }}
+          />
+        )}
+        
+        {/* Progress - different for parents vs learners */}
         {currentScreen === 'progress' && (
           userData?.role === 'parent' ? (
             <ParentDashboard 
@@ -430,16 +365,7 @@ function SocialCueApp({ onLogout }) {
           .custom-scrollbar::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 4px; }
         `}</style>
       </div>
-      {showVoicePractice && currentVoiceScenario && (
-        <ElevenLabsVoiceOrb
-          scenario={currentVoiceScenario}
-          gradeLevel={voiceScenarioGradeLevel || userData?.gradeLevel || userData?.grade || '6'}
-          timingConfig={getTimingForGrade(voiceScenarioGradeLevel || userData?.gradeLevel || userData?.grade || '6')}
-          onClose={handleCloseVoicePractice}
-        />
-      )}
     </ToastProvider>
   );
 }
-
 export default SocialCueApp;

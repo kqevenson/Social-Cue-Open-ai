@@ -1,371 +1,240 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Mic, Volume2, Loader2 } from 'lucide-react';
-import CleanVoiceService from '../services/CleanVoiceService';
-import { textToSpeechElevenLabs } from '../services/elevenLabsService';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Loader2, MessageCircle, ArrowLeft, Sparkles } from 'lucide-react';
+import useVoiceConversation from '../hooks/useVoiceConversation';
+import { UserProfile } from '../utils/userProfile';
+import contentService from '../services/contentService';
+import { playVoiceResponseWithOpenAI } from '../services/openAITTSService';
+import { getVoiceIntro } from '../content/training/introduction-scripts';
 
-const ChatGPTVoiceChat = ({ scenario, gradeLevel = '6-8', onComplete, onClose }) => {
-  const [messages, setMessages] = useState([]);
-  const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState(null);
-  const [currentPhase, setCurrentPhase] = useState('intro');
-  
-  const recognitionRef = useRef(null);
-  const silenceTimeoutRef = useRef(null);
-  const audioRef = useRef(null);
+const ChatGPTVoiceChat = ({ scenario, onClose }) => {
+  const gradeLevel = UserProfile.getGrade() || '6';
+  const [userInput, setUserInput] = useState('');
+  const [hasStarted, setHasStarted] = useState(false);
+  const [introMessage, setIntroMessage] = useState(null);
+  const [introSpoken, setIntroSpoken] = useState(false);
+  const [speakingIntro, setSpeakingIntro] = useState(false);
+
+  const normalizedScenario = useMemo(() => {
+    if (!scenario) {
+      return {
+        title: 'Voice Practice',
+        category: 'conversation-starters',
+        description: 'Practice real conversations with your AI coach.'
+      };
+    }
+    return scenario;
+  }, [scenario]);
+
+  const voiceConversation = useVoiceConversation({
+    scenario: normalizedScenario,
+    gradeLevel,
+    onComplete: () => {
+      console.log('✅ Session saved!');
+    }
+  });
+
+  const {
+    messages,
+    isAIThinking,
+    startConversation,
+    sendUserMessage,
+    endConversation,
+    error,
+    currentPhase
+  } = voiceConversation || {};
+
+  const buildIntroLine = useCallback(() => {
+    if (typeof contentService?.getPhaseInstructions === 'function') {
+      const phaseInfo = contentService.getPhaseInstructions('intro', normalizedScenario, gradeLevel);
+      if (phaseInfo?.introLine) {
+        return phaseInfo.introLine.trim();
+      }
+    }
+
+    try {
+      const topicDescriptor =
+        normalizedScenario?.topic ||
+        normalizedScenario?.topicTitle ||
+        normalizedScenario?.topicId ||
+        normalizedScenario?.title ||
+        '';
+      const introData = getVoiceIntro(gradeLevel, topicDescriptor, normalizedScenario);
+      return `${introData.greetingIntro} ${introData.scenarioIntro} ${introData.safetyAndConsent}`
+        .replace(/\s+/g, ' ')
+        .trim();
+    } catch (fallbackError) {
+      console.warn('Falling back to default intro line', fallbackError);
+      return "Hi! I'm Cue. Ready to warm up before practice?";
+    }
+  }, [gradeLevel, normalizedScenario]);
+
+  const displayedMessages = useMemo(() => {
+    if (!introMessage) return messages;
+
+    const filtered = messages.filter((msg, index) => {
+      if (index === 0 && msg.role === 'ai') {
+        return msg.text?.trim() !== introMessage.text?.trim();
+      }
+      return true;
+    });
+
+    return introMessage ? [introMessage, ...filtered] : filtered;
+  }, [introMessage, messages]);
 
   useEffect(() => {
-    console.log('🎓 ChatGPT Voice Chat initialized with grade:', gradeLevel, 'scenario:', scenario?.title);
-  }, [gradeLevel, scenario]);
-
-  useEffect(() => {
-    initializeSpeechRecognition();
-    speakIntro();
-
-    return () => {
-      cleanup();
-    };
-  }, [scenario, gradeLevel]);
-
-  const cleanup = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-    }
-    if (silenceTimeoutRef.current) {
-      clearTimeout(silenceTimeoutRef.current);
-    }
-    if (audioRef.current) {
-      audioRef.current.pause();
-      URL.revokeObjectURL(audioRef.current.src);
-      audioRef.current = null;
-    }
-  };
-
-  const initializeSpeechRecognition = () => {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      setError('Speech recognition not supported');
+    if (hasStarted || introSpoken || speakingIntro || !voiceConversation) {
       return;
     }
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.continuous = true; // Keep listening
-    recognitionRef.current.interimResults = false;
-    recognitionRef.current.lang = 'en-US';
+    let cancelled = false;
 
-    recognitionRef.current.onresult = (event) => {
-      const last = event.results.length - 1;
-      const text = event.results[last][0].transcript;
-      
-      if (text.trim()) {
-        handleUserMessage(text);
-      }
-    };
-
-    recognitionRef.current.onerror = (event) => {
-      if (event.error === 'no-speech') {
-        // Ignore no-speech errors, just keep listening
-        return;
-      }
-      console.error('Speech error:', event.error);
-    };
-
-    recognitionRef.current.onend = () => {
-      // Auto-restart if we're supposed to be listening
-      if (isListening) {
-        try {
-          recognitionRef.current.start();
-        } catch (e) {
-          // Ignore if already started
-        }
-      }
-    };
-  };
-
-  const speakIntro = async () => {
-    try {
-      setIsSpeaking(true);
-      setError(null);
-
-      const aiIntroResponse = await CleanVoiceService.generateResponse({
-        conversationHistory: [],
-        scenario,
-        gradeLevel,
-        phase: 'intro'
-      });
-
-      const introText = aiIntroResponse?.aiResponse || `Hey! Let's practice ${scenario?.title || 'conversation skills'}. Ready?`;
-      const introMessage = { role: 'assistant', content: introText };
-      setMessages([introMessage]);
-
-      const audioUrl = await textToSpeechElevenLabs(introText, gradeLevel);
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-
-      audio.onended = () => {
-        setIsSpeaking(false);
-        URL.revokeObjectURL(audioUrl);
-        startListening();
-      };
-
-      audio.onerror = (audioError) => {
-        console.error('Intro playback error:', audioError);
-        setIsSpeaking(false);
-        URL.revokeObjectURL(audioUrl);
-        startListening();
-      };
-
-      await audio.play();
-    } catch (err) {
-      console.error('Intro speech error:', err);
-      setIsSpeaking(false);
-      startListening();
-    }
-  };
-
-  const startListening = () => {
-    if (!recognitionRef.current || isListening) return;
-    
-    try {
-      recognitionRef.current.start();
-      setIsListening(true);
-      setError(null);
-    } catch (err) {
-      console.error('Error starting recognition:', err);
-    }
-  };
-
-  const stopListening = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-    }
-    setIsListening(false);
-  };
-
-  const handleUserMessage = async (text) => {
-    if (!text?.trim()) return;
-
-    stopListening();
-
-    console.log('📝 User said:', text.trim());
-
-    const userMessage = {
-      role: 'user',
-      content: text.trim(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setIsProcessing(true);
-    setError(null);
-
-    console.log('🤖 Sending to OpenAI with history:', [...messages, userMessage].length, 'messages');
-    console.log('📊 Current phase:', currentPhase);
-    console.log('🎓 Grade level:', gradeLevel);
-
-    try {
-      const aiResponse = await CleanVoiceService.generateResponse({
-        conversationHistory: [...messages, userMessage],
-        scenario,
-        gradeLevel,
-        phase: currentPhase
-      });
-
-      const aiMessage = {
-        id: `ai_${Date.now()}`,
-        role: 'assistant',
-        content: aiResponse.aiResponse,
-        phase: aiResponse.phase || currentPhase
-      };
-
-      setMessages((prev) => [...prev, aiMessage]);
-
-      if (aiResponse.phase && aiResponse.phase !== currentPhase) {
-        setCurrentPhase(aiResponse.phase);
-      }
-
-      setShouldContinue(aiResponse.shouldContinue);
-
-      console.log('✅ OpenAI response:', aiResponse.aiResponse);
-      console.log('📍 New phase:', aiResponse.phase);
-
-      setIsSpeaking(true);
-      const audioUrl = await textToSpeechElevenLabs(aiResponse.aiResponse, gradeLevel);
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-
-      audio.onended = () => {
-        setIsSpeaking(false);
-        URL.revokeObjectURL(audioUrl);
-
-        if (aiResponse.phase === 'complete') {
-          setTimeout(() => {
-            if (onComplete) {
-              onComplete({
-                messages: [...messages, userMessage, aiMessage],
-                scenario,
-                phase: 'complete',
-              });
-            }
-          }, 1000);
-        } else {
-          startListening();
-        }
-      };
-
-      audio.onerror = (audioError) => {
-        console.error('Audio playback error:', audioError);
-        setIsSpeaking(false);
-        URL.revokeObjectURL(audioUrl);
-        startListening();
-      };
-
-      await audio.play();
-    } catch (err) {
-      console.error('Error in conversation:', err);
-      setError('Sorry, I had trouble understanding. Can you try again?');
-
-      const fallbackMessage = {
-        role: 'assistant',
-        content: "I'm having a little trouble right now. Can you try saying that again?",
-      };
-
-      setMessages((prev) => [...prev, fallbackMessage]);
-
+    const runIntro = async () => {
       try {
-        setIsSpeaking(true);
-        const fallbackAudioUrl = await textToSpeechElevenLabs(fallbackMessage.content, gradeLevel);
-        const fallbackAudio = new Audio(fallbackAudioUrl);
-        audioRef.current = fallbackAudio;
+        setSpeakingIntro(true);
 
-        fallbackAudio.onended = () => {
-          setIsSpeaking(false);
-          URL.revokeObjectURL(fallbackAudioUrl);
-          startListening();
+        const introLineScript = buildIntroLine();
+        const introPayload = {
+          id: `intro_${Date.now()}`,
+          role: 'ai',
+          text: introLineScript,
+          phase: 'intro',
+          timestamp: Date.now()
         };
 
-        fallbackAudio.onerror = (audioError) => {
-          console.error('Fallback audio failed:', audioError);
-          setIsSpeaking(false);
-          URL.revokeObjectURL(fallbackAudioUrl);
-          startListening();
-        };
+        setIntroMessage(introPayload);
 
-        await fallbackAudio.play();
-      } catch (fallbackAudioError) {
-        console.error('Fallback audio generation failed:', fallbackAudioError);
-        setIsSpeaking(false);
-        startListening();
+        if (introLineScript) {
+          await playVoiceResponseWithOpenAI(introLineScript, { voice: 'shimmer' });
+        }
+
+        if (cancelled) return;
+
+        await startConversation();
+        setIntroSpoken(true);
+        setHasStarted(true);
+      } catch (introErr) {
+        console.error('Failed to handle intro phase', introErr);
+        setIntroSpoken(true);
+        setHasStarted(true);
+      } finally {
+        if (!cancelled) {
+          setSpeakingIntro(false);
+        }
       }
-    } finally {
-      setIsProcessing(false);
+    };
+
+    runIntro();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [buildIntroLine, gradeLevel, hasStarted, introSpoken, normalizedScenario, speakingIntro, startConversation, voiceConversation]);
+
+  const handleSend = async (event) => {
+    event.preventDefault();
+    if (!userInput.trim()) return;
+    await sendUserMessage(userInput.trim());
+    setUserInput('');
+  };
+
+  const handleExit = async () => {
+    try {
+      await endConversation();
+    } catch (err) {
+      console.error('Error ending conversation', err);
+    }
+    if (typeof onClose === 'function') {
+      onClose();
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black text-white z-50 flex flex-col">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-900/50 to-emerald-900/50 backdrop-blur-xl border-b border-white/10 p-6">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold">{scenario.title}</h2>
-            <p className="text-gray-400 text-sm mt-1">Voice Practice with AI Coach</p>
-          </div>
-          <button
-            onClick={() => {
-              cleanup();
-              onClose();
-            }}
-            className="p-2 hover:bg-white/10 rounded-full transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-4xl mx-auto space-y-4">
-          {messages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-purple-900 text-white p-6">
+      <div className="max-w-5xl mx-auto bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExit}
+              className="flex items-center gap-2 text-sm text-purple-200 hover:text-white transition"
             >
+              <ArrowLeft className="w-4 h-4" />
+              Exit Practice
+            </button>
+            <div className="h-8 w-px bg-white/10" />
+            <div>
+              <h2 className="text-lg font-semibold">{normalizedScenario.title}</h2>
+              <p className="text-xs text-purple-200">
+                Grade {gradeLevel} • {normalizedScenario.category?.replace('-', ' ')}
+              </p>
+            </div>
+          </div>
+          <div className="text-xs text-purple-200 flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
+            {currentPhase === 'intro' && 'Getting started'}
+            {currentPhase === 'practice' && 'In practice mode'}
+            {currentPhase === 'feedback' && 'Giving feedback'}
+            {currentPhase === 'complete' && 'Session complete'}
+          </div>
+        </div>
+
+        {/* Conversation */}
+        <div className="h-[28rem] overflow-y-auto px-6 py-6 space-y-4">
+          {displayedMessages.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-purple-200/70">
+              <MessageCircle className="w-12 h-12 mb-4" />
+              <p className="text-lg font-medium">Getting things ready...</p>
+              <p className="text-sm">Your AI coach is preparing the session.</p>
+            </div>
+          ) : (
+            displayedMessages.map((message) => (
               <div
-                className={`max-w-[70%] rounded-2xl p-4 ${
-                  msg.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white/10 text-white'
+                key={message.id}
+                className={`max-w-3xl rounded-2xl px-5 py-4 border bg-white/5 ${
+                  message.role === 'user'
+                    ? 'ml-auto border-purple-500/40 text-purple-50'
+                    : 'border-white/10 text-white/90'
                 }`}
               >
-                {msg.role === 'assistant' && (
-                  <div className="text-xs text-gray-400 mb-1">COACH CUE</div>
-                )}
-                <p className="text-sm md:text-base">{msg.content}</p>
+                <div className="flex items-center gap-2 mb-2 text-xs uppercase tracking-wide text-purple-200/70">
+                  <span>{message.role === 'user' ? 'You' : 'Coach'}</span>
+                  <span>•</span>
+                  <span>{new Date(message.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>
               </div>
+            ))
+          )}
+
+          {isAIThinking && (
+            <div className="flex items-center gap-2 text-sm text-purple-200/80">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Coach is thinking...
             </div>
-          ))}
-          
-          {isProcessing && (
-            <div className="flex justify-start">
-              <div className="bg-white/10 rounded-2xl p-4">
-                <Loader2 className="w-5 h-5 animate-spin" />
-              </div>
+          )}
+
+          {error && (
+            <div className="bg-red-500/20 border border-red-400/40 text-red-100 text-sm px-4 py-2 rounded-2xl">
+              {error}
             </div>
           )}
         </div>
-      </div>
 
-      {/* Error */}
-      {error && (
-        <div className="px-6 pb-4">
-          <div className="max-w-4xl mx-auto bg-red-500/20 border border-red-500/50 rounded-xl p-4">
-            <p className="text-red-200 text-sm">{error}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Status Bar */}
-      <div className="px-6 pb-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-white/5 rounded-xl p-4 text-center">
-            <p className="text-sm text-gray-400">
-              {isSpeaking ? (
-                <>🎤 AI Coach is speaking...</>
-              ) : isListening ? (
-                <>👂 Listening... speak naturally</>
-              ) : isProcessing ? (
-                <>⏳ Processing...</>
-              ) : (
-                <>🎤 Microphone ready</>
-              )}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Controls */}
-      <div className="bg-gradient-to-r from-blue-900/50 to-emerald-900/50 backdrop-blur-xl border-t border-white/10 p-6">
-        <div className="max-w-4xl mx-auto flex items-center justify-center gap-6">
-          {/* Always-on indicator */}
-          <div className="flex items-center gap-4">
-            <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-              isListening ? 'bg-green-500 animate-pulse' : 'bg-gray-700'
-            }`}>
-              <Mic className="w-8 h-8 text-white" />
-            </div>
-            
-            {isSpeaking && (
-              <div className="w-16 h-16 rounded-full flex items-center justify-center bg-blue-500 animate-pulse">
-                <Volume2 className="w-8 h-8 text-white" />
-              </div>
-            )}
-          </div>
-        </div>
-        
-        <p className="text-center text-gray-400 text-sm mt-4">
-          Microphone is always on - just speak naturally!
-        </p>
+        {/* Input */}
+        <form onSubmit={handleSend} className="border-t border-white/10 px-6 py-4 bg-black/30 flex items-center gap-3">
+          <input
+            value={userInput}
+            onChange={(e) => setUserInput(e.target.value)}
+            placeholder="Speak or type your response..."
+            className="flex-1 bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+          />
+          <button
+            type="submit"
+            className="bg-purple-600 hover:bg-purple-500 transition px-5 py-3 rounded-xl font-semibold"
+          >
+            Send
+          </button>
+        </form>
       </div>
     </div>
   );

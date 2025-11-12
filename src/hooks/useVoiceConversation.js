@@ -109,6 +109,7 @@ export default function useVoiceConversation({ scenario, gradeLevel = '6', onSes
 
   const addMessage = useCallback((role, text, phaseOverride) => {
     const phase = phaseOverride || currentPhase;
+    console.debug('[Conversation] addMessage', { role, phase, text });
     setMessages((prev) => [
       ...prev,
       {
@@ -135,6 +136,11 @@ export default function useVoiceConversation({ scenario, gradeLevel = '6', onSes
   }, [currentPhase, onSessionComplete]);
 
   const handleAIResponse = useCallback((text, phase) => {
+    console.log('[DEBUG] Adding assistant message:', {
+      role: 'assistant',
+      content: text,
+      phase
+    });
     addMessage('ai', text, phase);
     setIsAIThinking(false);
     if (phase !== 'complete') {
@@ -156,6 +162,7 @@ export default function useVoiceConversation({ scenario, gradeLevel = '6', onSes
     setIsWaitingForUser(false);
     setConversationTurns(0);
     setCurrentPhase('intro');
+    setMessages([]);
 
     try {
       const response = await generateResponse({
@@ -165,15 +172,11 @@ export default function useVoiceConversation({ scenario, gradeLevel = '6', onSes
         phase: 'intro'
       });
 
-      const introMessage = {
-        id: `ai_${Date.now()}`,
-        role: 'ai',
-        text: response.aiResponse,
-        phase: response.phase || 'intro'
-      };
-
-      setMessages([introMessage]);
-      setCurrentPhase(response.phase || 'intro');
+      const nextPhase = response.phase || 'intro';
+      console.log('[📤 Intro Assistant] About to push intro message', response.aiResponse);
+      addMessage('ai', response.aiResponse, nextPhase);
+      console.log('[📤 Intro Assistant] Intro message pushed');
+      setCurrentPhase(nextPhase);
       setIsAIThinking(false);
       setIsListening(true);
       setIsWaitingForUser(true);
@@ -185,20 +188,15 @@ export default function useVoiceConversation({ scenario, gradeLevel = '6', onSes
     } catch (error) {
       console.error('❌ Failed to start conversation with AI service:', error);
       const fallbackIntro = getIntroMessage(scenario, gradeLevel);
-      setMessages([
-        {
-          id: 'intro_fallback',
-          role: 'ai',
-          text: fallbackIntro,
-          phase: 'intro'
-        }
-      ]);
+      console.log('[📤 Intro Assistant] Using fallback intro message', fallbackIntro);
+      addMessage('ai', fallbackIntro, 'intro');
+      console.log('[📤 Intro Assistant] Fallback intro pushed');
       setIsAIThinking(false);
       setIsListening(true);
       setIsWaitingForUser(true);
       scheduleSilenceTimeout();
     }
-  }, [gradeLevel, resetTimers, scheduleSilenceTimeout, scenario]);
+  }, [addMessage, gradeLevel, resetTimers, scheduleSilenceTimeout, scenario]);
 
   const sendUserMessage = useCallback((userText) => {
     if (!sessionActiveRef.current) return;

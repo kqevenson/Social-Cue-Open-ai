@@ -57,8 +57,9 @@ export const conversationFlow = {
 };
 
 export const formatAIResponse = (feedback, content, gradeLevel) => {
+  const normalizedGrade = gradeLevel.toUpperCase();
   const wordLimit =
-    conversationFlow.turnTaking.wordLimits[gradeLevel] ??
+    conversationFlow.turnTaking.wordLimits[normalizedGrade] ??
     conversationFlow.stopTalk.talk.maxWords;
   const { turnSignals } = conversationFlow.stopTalk.talk;
   const turnSignal = turnSignals[Math.floor(Math.random() * turnSignals.length)];

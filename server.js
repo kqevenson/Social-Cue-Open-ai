@@ -9,6 +9,7 @@ import { getFirestore, collection, doc, getDoc, setDoc, query, where, getDocs, s
 import adaptiveLearningRoutes from './adaptive-learning-routes.js';
 import OpenAI from 'openai';
 import { getVoiceIntro } from './src/content/training/introduction-scripts.js';
+import chatRouter from './server/routes/chat.js';
 
 dotenv.config();
 
@@ -31,6 +32,7 @@ const db = getFirestore(firebaseApp);
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
+app.use('/api', chatRouter);
 
 // Initialize Anthropic client
 const anthropic = new Anthropic({

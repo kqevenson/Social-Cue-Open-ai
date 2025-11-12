@@ -6,3 +6,5 @@ const encouragement = {
 };
 
 export default encouragement;
+
+

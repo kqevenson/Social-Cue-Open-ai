@@ -5,6 +5,7 @@
 
 import responseEvaluationService from './responseEvaluationService.js';
 import { getVoiceIntro } from '../content/training/introduction-scripts.js';
+import { leadershipMethod as leadershipMethodConfig } from '../content/training/aibehaviorconfig.js';
 
 const WORD_LIMITS = {
   'K-2': 8,
@@ -51,6 +52,19 @@ class StandaloneContentService {
     this.wordLimits = WORD_LIMITS;
     this.timingRules = TIMING_RULES;
     this.evaluationService = responseEvaluationService;
+    this.phaseCues = {
+      intro: 'Welcome learner, explain safety, ask if they are ready.',
+      demonstrate: 'Model the skill with a short example and clear cue.',
+      practice: 'Let the learner respond. Give small prompts, stay supportive.',
+      feedback: 'Celebrate wins and nudge the next improvement.',
+      masteryCheck: 'Add a twist to confirm they can generalize the skill.',
+      complete: 'Wrap up with praise and a next step.'
+    };
+    this.leadershipMethod = {
+      ...leadershipMethodConfig,
+      getCurrentPhase: (turns = 0, successRate = 0) =>
+        this.determinePhase(turns, successRate)
+    };
   }
 
   getGradeKey(gradeLevel) {
@@ -69,6 +83,15 @@ class StandaloneContentService {
   getTimingForGrade(gradeLevel) {
     const gradeKey = this.getGradeKey(gradeLevel);
     return this.timingRules[gradeKey];
+  }
+
+  determinePhase(turnCount = 0, successRate = 0) {
+    if (turnCount <= 0) return 'intro';
+    if (turnCount <= 2) return 'demonstrate';
+    if (turnCount <= 5) return successRate < 0.5 ? 'practice' : 'practice';
+    if (turnCount <= 7 && successRate >= 0.6) return 'feedback';
+    if (turnCount > 7 && successRate >= 0.75) return 'complete';
+    return 'practice';
   }
 
   determineNextPhase(currentPhase, exchangeCount) {
@@ -333,6 +356,23 @@ Example: "You did great! I noticed you [specific thing]. That's exactly how good
       "Need a hint? Try starting with..."
     ];
     return prompts[Math.floor(Math.random() * prompts.length)];
+  }
+
+  calculateSuccessRate(history = []) {
+    const userTurns = history.filter((m) => m.role === 'user');
+    if (!userTurns.length) {
+      return 0;
+    }
+    const successfulTurns = userTurns.filter((m) => m.needsHelp !== true).length;
+    return Number((successfulTurns / userTurns.length).toFixed(2));
+  }
+
+  getPhaseInstructions(turnCount = 0, successRate = 0) {
+    const phase = this.leadershipMethod.getCurrentPhase?.(turnCount, successRate) ?? 'intro';
+    return {
+      phase,
+      cue: this.phaseCues[phase] || this.phaseCues.practice
+    };
   }
 }
 

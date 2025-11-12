@@ -1,11 +1,15 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import contentService from '../services/contentService';
+import { getVoiceIntro } from '../content/training/introduction-scripts';
 
 export const useConversationTracking = (gradeLevel, scenario) => {
   const [conversationHistory, setConversationHistory] = useState([]);
-  const [currentPhase, setCurrentPhase] = useState('demonstrate');
+  const [currentPhase, setCurrentPhase] = useState('intro');
   const [turnCount, setTurnCount] = useState(0);
   const [studentSuccessRate, setStudentSuccessRate] = useState(0);
+
+  console.debug('[ConversationTracking] initialized', { gradeLevel, scenario });
+  const introInjectedRef = useRef(false);
 
   /**
    * Update conversation phase based on progress
@@ -28,7 +32,12 @@ export const useConversationTracking = (gradeLevel, scenario) => {
    * Add message to conversation history
    */
   const addMessage = useCallback(
-    (role, text, needsHelp = false) => {
+    (role, text, needsHelp = false, phaseOverride = null) => {
+      const phase = phaseOverride || currentPhase;
+      if (role === 'assistant' || role === 'ai') {
+        console.log('[📤 Pushing assistant message to UI]', { role: 'assistant', content: text, phase });
+      }
+      console.debug('[Conversation] addMessage', { role, phase, text });
       const message = {
         id: Date.now(),
         role,
@@ -91,10 +100,26 @@ export const useConversationTracking = (gradeLevel, scenario) => {
    */
   const reset = useCallback(() => {
     setConversationHistory([]);
-    setCurrentPhase('demonstrate');
+    setCurrentPhase('intro');
     setTurnCount(0);
     setStudentSuccessRate(0);
   }, []);
+
+  useEffect(() => {
+    if (introInjectedRef.current) return;
+    if (currentPhase !== 'intro') return;
+    if (conversationHistory.length > 0) return;
+
+    const descriptor =
+      scenario?.topicId || scenario?.topic || scenario?.title || scenario?.category || '';
+    const introData = getVoiceIntro(gradeLevel, descriptor, scenario);
+    const introLine = introData?.firstPrompt || introData?.greetingIntro ||
+      "I'm your practice guide. Ready to try this together?";
+
+    console.log('[🎤 Intro Setup]', { currentPhase, introLine, descriptor });
+    addMessage('assistant', introLine, false, 'intro');
+    introInjectedRef.current = true;
+  }, [addMessage, conversationHistory.length, currentPhase, gradeLevel, scenario]);
 
   return {
     conversationHistory,

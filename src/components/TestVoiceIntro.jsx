@@ -7,13 +7,13 @@ const TestVoiceIntro = () => {
   const [selectedTopic, setSelectedTopic] = useState(topics[0]?.id || '');
 
   const introPreview = useMemo(() => {
-    const introData = getVoiceIntro(selectedGrade, selectedTopic);
+    const introData = getVoiceIntro(selectedGrade, selectedTopic) || {};
     return {
-      greeting: introData.greetingIntro,
-      scenarioIntro: introData.scenarioIntro,
-      safety: introData.safetyAndConsent,
-      warmup: introData.firstPrompt,
-      scenario: introData.scenarioDetails
+      greeting: introData.greetingIntro || "Hi, I'm Cue — let's get started!",
+      scenarioIntro: introData.scenarioIntro || "Here's a bit of context for our practice...",
+      safety: introData.safetyAndConsent || "If at any time you'd like to stop, just let me know.",
+      warmup: introData.firstPrompt || "Let's begin with a warm-up question.",
+      scenario: introData.scenarioDetails || "Here's the scenario we'll be working on."
     };
   }, [selectedGrade, selectedTopic]);
 

@@ -52,10 +52,21 @@ export const conversationFlow = {
   }
 };
 
+export function classifyGradeBand(gradeLevel) {
+  const grade = parseInt(gradeLevel, 10);
+  if (Number.isNaN(grade)) return '6-8';
+  if (grade <= 2) return 'K-2';
+  if (grade <= 5) return '3-5';
+  if (grade <= 8) return '6-8';
+  return '9-12';
+}
+
 // Helper to format AI response with proper structure
 export const formatAIResponse = (feedback, content, gradeLevel) => {
+  const normalizedGradeLevel = classifyGradeBand(gradeLevel);
+
   const wordLimit =
-    conversationFlow.turnTaking.wordLimits[gradeLevel] ??
+    conversationFlow.turnTaking.wordLimits[normalizedGradeLevel] ??
     conversationFlow.stopTalk.talk.maxWords;
 
   const { turnSignals } = conversationFlow.stopTalk.talk;
@@ -143,13 +154,4 @@ export function buildIntroSegments({
       expectResponse: true
     }
   ].filter(Boolean);
-}
-
-export function classifyGradeBand(gradeLevel) {
-  const grade = parseInt(gradeLevel, 10);
-  if (Number.isNaN(grade)) return '6-8';
-  if (grade <= 2) return 'K-2';
-  if (grade <= 5) return '3-5';
-  if (grade <= 8) return '6-8';
-  return '9-12';
 }
