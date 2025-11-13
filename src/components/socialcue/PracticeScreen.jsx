@@ -1,210 +1,155 @@
-import React, { useState, useEffect } from "react";
-import { ArrowRight, MessageCircle, Ear, Users, Zap, Mic, Volume2 } from "lucide-react";
-import ChatGPTVoiceChat from "../ChatGPTVoiceChat";
-import { getTimingForGrade } from "../../content/training/aibehaviorconfig";
-import PracticeSelection from "./PracticeSelection";
+import React, { useEffect, useMemo, useState } from "react";
+import VoiceCoachOrbScreen from "../VoiceCoachOrbScreen";
+import {
+  topics as voicePracticeTopics,
+  getScenariosForTopic,
+  getGradeBandFromGrade
+} from "../../data/voicePracticeScenarios";
+import { getScenarioForTopic } from "../../content/training/conversation-flow";
+import { getIntroductionSequence } from "../../content/training/introduction-scripts";
+import { AI_BEHAVIOR_CONFIG, conversationFlow as behaviorConversationFlow } from "../../content/training/aibehaviorconfig";
 
-function PracticeScreen({ onNavigate, darkMode }) {
-  const [showVoiceSelection, setShowVoiceSelection] = useState(false);
-  const [showVoiceChat, setShowVoiceChat] = useState(false);
-  const [selectedVoiceTopic, setSelectedVoiceTopic] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [userGradeLevel, setUserGradeLevel] = useState('6-8');
+const FALLBACK_ICON = "💬";
 
-  const normalizeGradeLevel = (gradeValue) => {
-    if (typeof gradeValue === 'string' && gradeValue.includes('-')) {
-      return gradeValue;
-    }
-
-    const numeric = parseInt(gradeValue, 10);
-    if (Number.isNaN(numeric)) {
-      return '6-8';
-    }
-
-    if (numeric <= 2) return 'k-2';
-    if (numeric <= 5) return '3-5';
-    if (numeric <= 8) return '6-8';
-    return '9-12';
-  };
+const PracticeScreen = ({ darkMode }) => {
+  const [userGradeBand, setUserGradeBand] = useState("6-8");
+  const [userGradeNumber, setUserGradeNumber] = useState(6);
+  const [learnerName, setLearnerName] = useState("");
+  const [selectedSession, setSelectedSession] = useState(null);
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem('socialCueUserData');
+      const stored = localStorage.getItem("socialCueUserData");
       if (stored) {
         const parsed = JSON.parse(stored);
-        const rawGrade = parsed?.gradeLevel || parsed?.grade || '6';
-        const normalized = normalizeGradeLevel(rawGrade);
-        setUserGradeLevel(normalized);
+        const rawGrade = parsed?.gradeLevel || parsed?.grade || "6";
+        const numeric = parseInt(String(rawGrade).replace(/[^0-9]/g, "") || "6", 10);
+        const band = getGradeBandFromGrade(numeric).toLowerCase();
+        setUserGradeBand(band);
+        setUserGradeNumber(Number.isNaN(numeric) ? 6 : numeric);
+
+        const possibleName =
+          parsed?.firstName ||
+          parsed?.first_name ||
+          parsed?.profile?.firstName ||
+          parsed?.profile?.name ||
+          parsed?.displayName ||
+          parsed?.name ||
+          "";
+        setLearnerName(possibleName);
         return;
       }
-    } catch (error) {
-      console.warn('Unable to read stored user grade level:', error);
+    } catch (err) {
+      console.warn("Failed to parse grade level from localStorage", err);
     }
-    setUserGradeLevel('6-8');
+    setUserGradeBand("6-8");
+    setUserGradeNumber(6);
   }, []);
 
-  const categories = [
-    { id: 'conversation', title: 'Conversation Skills', description: 'Learn to start and maintain engaging conversations', color: '#4A90E2', icon: <MessageCircle className="w-12 h-12" />, sessions: 3 },
-    { id: 'listening', title: 'Active Listening', description: 'Master the art of truly hearing others', color: '#34D399', icon: <Ear className="w-12 h-12" />, sessions: 2 },
-    { id: 'body-language', title: 'Body Language', description: 'Read and project confident non-verbal signals', color: '#8B5CF6', icon: <Users className="w-12 h-12" />, sessions: 4 },
-    { id: 'confidence', title: 'Confidence Building', description: 'Transform your social presence and self-assurance', color: '#14B8A6', icon: <Zap className="w-12 h-12" />, sessions: 3 }
-  ];
+  const topicPreviews = useMemo(() => {
+    return voicePracticeTopics.map((topic) => {
+      const gradeScenarios = getScenariosForTopic(topic.id, userGradeNumber || 6) || [];
+      const sampleScenario = gradeScenarios?.[0] || null;
+      const scenarioTitles = gradeScenarios.map((scenario) => scenario.title).filter(Boolean);
 
-  const handleVoiceTopicSelect = (topic) => {
-    setSelectedVoiceTopic(topic);
-    setShowVoiceSelection(false);
-    setShowVoiceChat(true);
+      return {
+        topic,
+        gradeScenarios,
+        sampleScenario,
+        scenarioTitles
+      };
+    });
+  }, [userGradeNumber]);
+
+  const handleStartPractice = (topic) => {
+    const scenario = getScenarioForTopic(topic.id, userGradeNumber || 6);
+    if (!scenario) {
+      alert("No scenarios available for this topic.");
+      return;
+    }
+
+    const introScripts = getIntroductionSequence(String(userGradeNumber || 6), scenario.scriptKey || scenario.topicId);
+    const introLine = [introScripts?.greetingIntro, introScripts?.scenarioIntro, introScripts?.safetyAndConsent]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    const enrichedScenario = {
+      ...scenario,
+      introScripts,
+      behaviorConfig: AI_BEHAVIOR_CONFIG,
+      conversationFlow: behaviorConversationFlow
+    };
+
+    setSelectedSession({
+      scenario: enrichedScenario,
+      introLine,
+      introScripts,
+      learnerName: learnerName || ""
+    });
   };
 
-  const handleCloseVoiceChat = () => {
-    setShowVoiceChat(false);
-    setSelectedVoiceTopic(null);
-    setShowVoiceSelection(true);
-    setSelectedCategory(null);
-  };
-
-  const handleCloseVoiceSelection = () => {
-    setShowVoiceSelection(false);
-    setSelectedCategory(null);
-  };
-
-  if (showVoiceChat && selectedVoiceTopic) {
-    console.log('🎓 Launching ChatGPTVoiceChat with grade:', userGradeLevel);
+  if (selectedSession) {
     return (
-      <ChatGPTVoiceChat
-        scenario={selectedVoiceTopic}
-        gradeLevel={userGradeLevel}
-        timingConfig={getTimingForGrade(userGradeLevel)}
-        onClose={handleCloseVoiceChat}
-      />
-    );
-  }
-
-  if (showVoiceSelection) {
-    return (
-      <PracticeSelection
-        onTopicSelect={handleVoiceTopicSelect}
-        onClose={handleCloseVoiceSelection}
-        categoryFilter={selectedCategory}
+      <VoiceCoachOrbScreen
+        scenario={selectedSession.scenario}
+        gradeLevel={selectedSession.scenario.gradeLevel}
+        introLine={selectedSession.introLine}
+        introScripts={selectedSession.introScripts}
+        learnerName={selectedSession.learnerName}
+        behaviorConfig={AI_BEHAVIOR_CONFIG}
+        onEndSession={() => setSelectedSession(null)}
       />
     );
   }
 
   return (
-    <div className="pb-24">
-      <div className="fixed inset-0 opacity-10 pointer-events-none">
-        <div className="absolute top-20 left-20 w-96 h-96 bg-blue-500 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-20 right-20 w-96 h-96 bg-emerald-400 rounded-full blur-3xl"></div>
-      </div>
-
-      <div className="relative z-10 max-w-7xl mx-auto px-6 py-8">
-        <div className="mb-12 space-y-6">
-          <h1 className={`text-5xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Practice</h1>
-          <p className={`text-xl ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Choose a category to begin your learning journey</p>
-
+    <div className="max-w-5xl mx-auto px-6 py-10">
+      <h1 className={`text-4xl font-bold mb-6 ${darkMode ? "text-white" : "text-gray-900"}`}>
+        Practice
+      </h1>
+      <p className={`mb-8 text-lg ${darkMode ? "text-gray-400" : "text-gray-700"}`}>
+        Pick a topic to try a conversation.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {topicPreviews.map(({ topic, gradeScenarios, sampleScenario, scenarioTitles }) => (
           <div
-            className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-purple-600 via-pink-500 to-rose-500 px-8 py-10 shadow-lg hover:shadow-xl transition-all cursor-pointer"
-            onClick={() => setShowVoiceSelection(true)}
+            key={topic.id}
+            className={`rounded-3xl p-6 border transition-all hover:shadow-xl cursor-pointer ${
+              darkMode ? "bg-white/5 text-white border-white/10" : "bg-white text-gray-900 border-gray-200"
+            }`}
+            onClick={() => handleStartPractice(topic)}
           >
-            <div className="absolute -top-24 -right-32 w-96 h-96 bg-white/20 rounded-full blur-3xl opacity-60" />
-            <div className="absolute -bottom-32 -left-20 w-80 h-80 bg-blue-400/20 rounded-full blur-3xl opacity-70" />
-            <div className="relative z-10 grid grid-cols-1 md:grid-cols-[auto,1fr] gap-8 items-center">
-              <div className="space-y-4">
-                <div className="relative w-20 h-20 rounded-3xl bg-white/15 flex items-center justify-center animate-pulse-slow">
-                  <Mic className="w-10 h-10 text-white" />
-                  <span className="absolute -top-3 -right-3 bg-emerald-400 text-emerald-900 text-xs font-bold px-2 py-1 rounded-full shadow">
-                    NEW
-                  </span>
-                </div>
-                <div>
-                  <h2 className="text-3xl font-bold text-white mb-2">Voice Practice Sessions</h2>
-                  <p className="text-white/90 text-sm md:text-base">
-                    Practice real conversations with an AI coach. Speak naturally, get personalized feedback,
-                    and build confidence through guided dialogue.
-                  </p>
-                </div>
+            <div className="text-4xl mb-4">{topic.icon || FALLBACK_ICON}</div>
+            <h2 className="text-2xl font-semibold mb-2">{topic.title}</h2>
+            {topic.description && <p className="text-sm mb-3">{topic.description}</p>}
+
+            {sampleScenario && (
+              <div className={`${darkMode ? "bg-white/10" : "bg-blue-50"} rounded-xl p-4`}>
+                <p className="text-sm font-medium">
+                  Example: <span className="italic">{sampleScenario.title}</span>
+                </p>
+                {sampleScenario.contextLine && (
+                  <p className="text-xs mt-1 text-gray-500 dark:text-gray-300">{sampleScenario.contextLine}</p>
+                )}
               </div>
-              <div className="space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    'Real-time feedback',
-                    'Age-appropriate voices',
-                    'Warm teacher personality',
-                    'Practice transcripts',
-                  ].map((tag) => (
-                    <span key={tag} className="bg-white/20 text-white px-3 py-1 rounded-full text-xs font-semibold tracking-wide">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-                <div className="inline-flex items-center gap-2 text-sm font-semibold text-white/90 uppercase tracking-wide">
-                  Start Voice Practice
-                  <ArrowRight className="w-4 h-4" />
-                </div>
-              </div>
-            </div>
+            )}
+
+            {scenarioTitles.length > 1 && (
+              <p className="text-xs mt-3 text-gray-500 dark:text-gray-300">
+                Includes scenarios like {scenarioTitles.slice(0, 3).join(", ")}
+                {scenarioTitles.length > 3 ? " and more." : "."}
+              </p>
+            )}
+
+            <button className="mt-4 inline-block px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-500">
+              Start Session
+            </button>
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {categories.map((category, index) => (
-            <div key={category.id} className={`backdrop-blur-xl border rounded-3xl overflow-hidden transition-all duration-200 group hover:scale-105 hover:shadow-2xl animate-slideUp ${
-              darkMode ? 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/8' : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50 shadow-sm'
-            }`} style={{ animationDelay: `${index * 100}ms` }}>
-              <div className="p-8">
-                <div className="flex items-start justify-between mb-6">
-                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"
-                    style={{ backgroundColor: `${category.color}30` }}>
-                    <div style={{ color: category.color }}>{category.icon}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-3xl font-bold" style={{ color: category.color }}>{category.sessions}</div>
-                    <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Sessions</div>
-                  </div>
-                </div>
-
-                <h3 className={`text-2xl font-bold mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{category.title}</h3>
-                <p className={`text-base mb-6 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{category.description}</p>
-
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <button
-                    onClick={() => onNavigate('practice', 1)}
-                    className={`py-2.5 rounded-xl border text-sm font-semibold transition-all ${
-                      darkMode
-                        ? 'bg-white/10 border-white/10 text-white hover:bg-white/15'
-                        : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    Text Practice
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedCategory(category.id);
-                      setShowVoiceSelection(true);
-                    }}
-                    className="py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2"
-                    style={{ backgroundColor: category.color, color: 'white', borderColor: `${category.color}55` }}
-                  >
-                    <Volume2 className="w-4 h-4" />
-                    Voice
-                  </button>
-                </div>
-
-                <button
-                  onClick={() => onNavigate('practice', 1)}
-                  className="w-full text-white font-bold py-3 px-6 rounded-full border-2 transition-all flex items-center justify-center gap-2 group-hover:bg-gradient-to-r group-hover:from-blue-500 group-hover:to-emerald-400 group-hover:border-transparent"
-                  style={{ borderColor: `${category.color}50`, color: category.color }}
-                >
-                  Explore Sessions
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+        ))}
       </div>
     </div>
   );
-}
+};
 
 export default PracticeScreen;

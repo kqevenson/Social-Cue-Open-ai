@@ -116,3 +116,57 @@ body {
 .progress-glow {
   filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.4));
 }
+
+.voice-ui-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.75rem;
+}
+
+.orb {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  margin: 0 auto;
+  background: radial-gradient(circle at 30% 30%, rgba(148, 233, 255, 1), rgba(37, 99, 235, 0.75));
+  box-shadow: 0 0 25px rgba(94, 234, 212, 0.6), 0 0 55px rgba(56, 189, 248, 0.45);
+  animation: orbPulse 2.8s ease-in-out infinite;
+  transition: transform 0.4s ease, box-shadow 0.4s ease, opacity 0.4s ease;
+}
+
+.orb--listening {
+  transform: scale(1.05);
+  box-shadow: 0 0 35px rgba(59, 130, 246, 0.65), 0 0 65px rgba(37, 99, 235, 0.45);
+}
+
+.orb--speaking {
+  transform: scale(1.12);
+  box-shadow: 0 0 45px rgba(16, 185, 129, 0.75), 0 0 80px rgba(16, 185, 129, 0.55);
+}
+
+.subtitle {
+  text-align: center;
+  font-size: 1.2rem;
+  margin-top: 0.75rem;
+  min-height: 1.5rem;
+}
+
+.mic-status {
+  text-align: center;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+}
+
+@keyframes orbPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 25px rgba(94, 234, 212, 0.55), 0 0 55px rgba(56, 189, 248, 0.4);
+  }
+  50% {
+    transform: scale(1.04);
+    box-shadow: 0 0 35px rgba(96, 165, 250, 0.65), 0 0 70px rgba(56, 189, 248, 0.45);
+  }
+}

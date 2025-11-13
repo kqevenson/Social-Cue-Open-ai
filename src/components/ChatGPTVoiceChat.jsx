@@ -1,18 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, MessageCircle, ArrowLeft, Sparkles } from 'lucide-react';
 import useVoiceConversation from '../hooks/useVoiceConversation';
 import { UserProfile } from '../utils/userProfile';
-import contentService from '../services/contentService';
-import { playVoiceResponseWithOpenAI } from '../services/openAITTSService';
-import { getVoiceIntro } from '../content/training/introduction-scripts';
 
 const ChatGPTVoiceChat = ({ scenario, onClose }) => {
   const gradeLevel = UserProfile.getGrade() || '6';
   const [userInput, setUserInput] = useState('');
   const [hasStarted, setHasStarted] = useState(false);
-  const [introMessage, setIntroMessage] = useState(null);
-  const [introSpoken, setIntroSpoken] = useState(false);
-  const [speakingIntro, setSpeakingIntro] = useState(false);
 
   const normalizedScenario = useMemo(() => {
     if (!scenario) {
@@ -43,92 +37,18 @@ const ChatGPTVoiceChat = ({ scenario, onClose }) => {
     currentPhase
   } = voiceConversation || {};
 
-  const buildIntroLine = useCallback(() => {
-    if (typeof contentService?.getPhaseInstructions === 'function') {
-      const phaseInfo = contentService.getPhaseInstructions('intro', normalizedScenario, gradeLevel);
-      if (phaseInfo?.introLine) {
-        return phaseInfo.introLine.trim();
-      }
-    }
-
-    try {
-      const topicDescriptor =
-        normalizedScenario?.topic ||
-        normalizedScenario?.topicTitle ||
-        normalizedScenario?.topicId ||
-        normalizedScenario?.title ||
-        '';
-      const introData = getVoiceIntro(gradeLevel, topicDescriptor, normalizedScenario);
-      return `${introData.greetingIntro} ${introData.scenarioIntro} ${introData.safetyAndConsent}`
-        .replace(/\s+/g, ' ')
-        .trim();
-    } catch (fallbackError) {
-      console.warn('Falling back to default intro line', fallbackError);
-      return "Hi! I'm Cue. Ready to warm up before practice?";
-    }
-  }, [gradeLevel, normalizedScenario]);
-
-  const displayedMessages = useMemo(() => {
-    if (!introMessage) return messages;
-
-    const filtered = messages.filter((msg, index) => {
-      if (index === 0 && msg.role === 'ai') {
-        return msg.text?.trim() !== introMessage.text?.trim();
-      }
-      return true;
-    });
-
-    return introMessage ? [introMessage, ...filtered] : filtered;
-  }, [introMessage, messages]);
-
   useEffect(() => {
-    if (hasStarted || introSpoken || speakingIntro || !voiceConversation) {
-      return;
+    if (!hasStarted) {
+      console.log('🔁 Triggering startConversation with:', { gradeLevel, normalizedScenario });
+
+      startConversation()
+        .then(() => {
+          console.log('🎯 Starting practice for:', normalizedScenario.title);
+        })
+        .catch((err) => console.error('Failed to start conversation', err));
+      setHasStarted(true);
     }
-
-    let cancelled = false;
-
-    const runIntro = async () => {
-      try {
-        setSpeakingIntro(true);
-
-        const introLineScript = buildIntroLine();
-        const introPayload = {
-          id: `intro_${Date.now()}`,
-          role: 'ai',
-          text: introLineScript,
-          phase: 'intro',
-          timestamp: Date.now()
-        };
-
-        setIntroMessage(introPayload);
-
-        if (introLineScript) {
-          await playVoiceResponseWithOpenAI(introLineScript, { voice: 'shimmer' });
-        }
-
-        if (cancelled) return;
-
-        await startConversation();
-        setIntroSpoken(true);
-        setHasStarted(true);
-      } catch (introErr) {
-        console.error('Failed to handle intro phase', introErr);
-        setIntroSpoken(true);
-        setHasStarted(true);
-      } finally {
-        if (!cancelled) {
-          setSpeakingIntro(false);
-        }
-      }
-    };
-
-    runIntro();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [buildIntroLine, gradeLevel, hasStarted, introSpoken, normalizedScenario, speakingIntro, startConversation, voiceConversation]);
+  }, [hasStarted, normalizedScenario.title, startConversation]);
 
   const handleSend = async (event) => {
     event.preventDefault();
@@ -180,16 +100,16 @@ const ChatGPTVoiceChat = ({ scenario, onClose }) => {
 
         {/* Conversation */}
         <div className="h-[28rem] overflow-y-auto px-6 py-6 space-y-4">
-          {displayedMessages.length === 0 ? (
+          {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-purple-200/70">
               <MessageCircle className="w-12 h-12 mb-4" />
               <p className="text-lg font-medium">Getting things ready...</p>
               <p className="text-sm">Your AI coach is preparing the session.</p>
             </div>
           ) : (
-            displayedMessages.map((message) => (
+            messages.map((message, index) => (
               <div
-                key={message.id}
+                key={`${message.role}-${message.timestamp}-${index}`}
                 className={`max-w-3xl rounded-2xl px-5 py-4 border bg-white/5 ${
                   message.role === 'user'
                     ? 'ml-auto border-purple-500/40 text-purple-50'
@@ -199,7 +119,7 @@ const ChatGPTVoiceChat = ({ scenario, onClose }) => {
                 <div className="flex items-center gap-2 mb-2 text-xs uppercase tracking-wide text-purple-200/70">
                   <span>{message.role === 'user' ? 'You' : 'Coach'}</span>
                   <span>•</span>
-                  <span>{new Date(message.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
                 <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>
               </div>
@@ -219,7 +139,6 @@ const ChatGPTVoiceChat = ({ scenario, onClose }) => {
             </div>
           )}
         </div>
-
         {/* Input */}
         <form onSubmit={handleSend} className="border-t border-white/10 px-6 py-4 bg-black/30 flex items-center gap-3">
           <input

@@ -110,13 +110,17 @@ export default function useVoiceConversation({ scenario, gradeLevel = '6', onSes
   const addMessage = useCallback((role, text, phaseOverride) => {
     const phase = phaseOverride || currentPhase;
     console.debug('[Conversation] addMessage', { role, phase, text });
+    const uniqueId = `${role}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const timestamp = Date.now();
+
     setMessages((prev) => [
       ...prev,
       {
-        id: `${role}_${Date.now()}`,
+        id: uniqueId,
         role,
         text,
-        phase
+        phase,
+        timestamp
       }
     ]);
   }, [currentPhase]);

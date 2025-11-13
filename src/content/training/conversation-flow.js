@@ -1,6 +1,12 @@
 // Social Cue Conversation Flow (STOP-TALK method)
 
 import { getVoiceIntro } from './introduction-scripts';
+import {
+  topics as voicePracticeTopics,
+  getScenariosForTopic,
+  getGradeBandFromGrade,
+  getScenarioIntroKey
+} from '../../data/voicePracticeScenarios';
 
 export const conversationFlow = {
   // STOP-TALK phases
@@ -82,6 +88,59 @@ export const formatAIResponse = (feedback, content, gradeLevel) => {
   return response;
 };
 
+export function getScenarioForTopic(topicLike, gradeLevel = '6') {
+  if (!topicLike) return null;
+
+  const topicId =
+    typeof topicLike === 'string' ? topicLike : (topicLike && topicLike.id) ? topicLike.id : null;
+  const topic = voicePracticeTopics.find((t) => t.id === topicId) || null;
+
+  const numericGrade = parseInt(gradeLevel, 10) || 6;
+  const gradeScenarios = topic ? getScenariosForTopic(topic.id, numericGrade) || [] : [];
+  const firstScenario = gradeScenarios[0] || null;
+
+  if (!topic || !firstScenario) {
+    return null;
+  }
+
+  const scenarioTitles = gradeScenarios.map((scenario) => scenario.title).filter(Boolean);
+  const compiledDescription = [
+    topic.description || '',
+    scenarioTitles.length
+      ? `This topic includes scenarios such as ${scenarioTitles
+          .slice(0, 3)
+          .join(', ')}${scenarioTitles.length > 3 ? ' and more.' : '.'}`
+      : null
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  const baseDescription =
+    compiledDescription ||
+    firstScenario.description ||
+    firstScenario.prompt ||
+    `Practice conversations related to ${topic.title.toLowerCase()}.`;
+
+  return {
+    id: firstScenario.id,
+    scenarioId: firstScenario.id,
+    title: topic.title,
+    category: topic.category || topic.id,
+    description: baseDescription,
+    prompt: firstScenario.prompt || firstScenario.contextLine || '',
+    warmupQuestion: firstScenario.prompt || firstScenario.warmupQuestion || '',
+    topicId: topic.id,
+    topicTitle: topic.title,
+    topicDescription: topic.description,
+    topicIcon: topic.icon,
+    relatedScenarios: gradeScenarios,
+    gradeLevel: numericGrade,
+    gradeBand: getGradeBandFromGrade(numericGrade).toLowerCase(),
+    scriptKey: getScenarioIntroKey(topic.id)
+  };
+}
+
 export default conversationFlow;
 
 const DEFAULT_MICRO_TIPS = [
@@ -111,10 +170,11 @@ export function buildIntroSegments({
   learnerName,
   tips = DEFAULT_MICRO_TIPS
 } = {}) {
-  const topicDescriptor =
-    scenario?.topicId || scenario?.topic || scenario?.topicTitle || scenario?.title || '';
-  const introConfig = getVoiceIntro(gradeLevel || '6', topicDescriptor, scenario);
-  const sections = introConfig.sections || {};
+  const sequence = getIntroductionSequence(gradeLevel || '6');
+  const sections = sequence.sections || {};
+  const scenarioKey = getScenarioIntroKey(scenario?.topicId || scenario?.id || '');
+  const scenarioScripts = sequence.scenarios || {};
+  const scenarioScript = scenarioKey ? scenarioScripts[scenarioKey] : null;
 
   const greetingLine = sections.greeting || FALLBACK_GREETING;
   const introLine = sections.introduction || '';
@@ -127,9 +187,10 @@ export function buildIntroSegments({
     ? `Awesome, ${learnerName}! I'm really glad you're here.`
     : "Nice to meet you! I'm really glad you're here.";
 
-  const scenarioLine = introConfig.scenarioIntro || SCENARIO_FALLBACK(scenario);
+  const scenarioLine = scenarioScript?.intro || SCENARIO_FALLBACK(scenario);
   const coachingTip = tips[Math.floor(Math.random() * tips.length)];
-  const warmUpQuestion = introConfig.firstPrompt || 'Want to try it out with me?';
+  const warmUpQuestion =
+    scenarioScript?.practicePrompt || sequence.firstPrompt || 'Wanna try it out with me?';
 
   return [
     { id: 'greet', text: greetingLine, expectResponse: false },
@@ -139,8 +200,8 @@ export function buildIntroSegments({
     { id: 'ask-name', text: namePrompt, expectResponse: true },
     { id: 'ack-name', text: acknowledgement, expectResponse: false },
     {
-      id: 'scenario-intro',
-      text: scenarioLine,
+      id: 'scenario-setup',
+      text: `Today we’re practicing how to handle this: ${scenario?.title || 'a real-life chat'}. ${scenarioLine}`,
       expectResponse: false
     },
     {

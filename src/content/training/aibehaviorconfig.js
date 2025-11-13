@@ -157,3 +157,10 @@ export const leadershipMethod = {
     }
   }
 };
+
+export const AI_BEHAVIOR_CONFIG = {
+  conversationFlow,
+  timingRules,
+  leadershipMethod,
+  formatAIResponse
+};

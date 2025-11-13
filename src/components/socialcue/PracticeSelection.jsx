@@ -1,57 +1,6 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { ArrowLeft } from "lucide-react";
-
-const topics = [
-  {
-    id: "starting-conversation",
-    title: "Starting a Conversation",
-    description: "Practice friendly openings and confident introductions.",
-    icon: "👋",
-    category: "conversation"
-  },
-  {
-    id: "keeping-conversation",
-    title: "Keeping a Conversation Going",
-    description: "Learn to ask follow-up questions and keep the dialogue flowing.",
-    icon: "💬",
-    category: "conversation"
-  },
-  {
-    id: "paying-attention",
-    title: "Paying Attention",
-    description: "Strengthen focus and avoid distractions while someone speaks.",
-    icon: "👀",
-    category: "listening"
-  },
-  {
-    id: "showing-listening",
-    title: "Showing You're Listening",
-    description: "Practice eye contact, nodding, and reflective statements.",
-    icon: "👂",
-    category: "listening"
-  },
-  {
-    id: "reading-body-language",
-    title: "Reading Body Language",
-    description: "Notice facial expressions, posture, and tone cues.",
-    icon: "🧠",
-    category: "communication"
-  },
-  {
-    id: "asking-for-help",
-    title: "Asking for Help",
-    description: "Practice polite, confident requests when you need assistance.",
-    icon: "🙋",
-    category: "confidence"
-  },
-  {
-    id: "joining-group",
-    title: "Joining a Group",
-    description: "Find the right moment, introduce yourself, and join in smoothly.",
-    icon: "🤝",
-    category: "group"
-  }
-];
+import { flattenPracticeScenarios, getPracticeTopicById } from "../../content/practiceTopics";
 
 const palette = [
   "from-purple-500/80 via-pink-500/70 to-rose-500/80",
@@ -60,12 +9,15 @@ const palette = [
   "from-amber-500/80 via-orange-500/70 to-rose-500/80"
 ];
 
-const PracticeSelection = ({ onTopicSelect, onClose, categoryFilter }) => {
-  const filteredTopics = Array.isArray(categoryFilter)
-    ? topics.filter((topic) => categoryFilter.includes(topic.category))
-    : categoryFilter
-    ? topics.filter((topic) => topic.category === categoryFilter)
-    : topics;
+const PracticeSelection = ({ onTopicSelect, onClose, topicIdFilter }) => {
+  const scenarios = useMemo(() => flattenPracticeScenarios(), []);
+
+  const filteredScenarios = useMemo(() => {
+    if (!topicIdFilter) return scenarios;
+    return scenarios.filter((scenario) => scenario.topicId === topicIdFilter);
+  }, [scenarios, topicIdFilter]);
+
+  const headerTopic = topicIdFilter ? getPracticeTopicById(topicIdFilter) : null;
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 text-white pb-24">
@@ -86,15 +38,20 @@ const PracticeSelection = ({ onTopicSelect, onClose, categoryFilter }) => {
           </button>
           <div>
             <p className="text-sm uppercase tracking-[0.3em] text-white/60">Voice Practice</p>
-            <h1 className="text-4xl font-semibold">Choose a topic to start practicing</h1>
+            <h1 className="text-4xl font-semibold">
+              {headerTopic ? headerTopic.title : "Pick a scenario to rehearse"}
+            </h1>
+            {headerTopic && (
+              <p className="mt-1 text-white/70 max-w-2xl">{headerTopic.description}</p>
+            )}
           </div>
         </header>
 
         <section className="grid gap-6 sm:grid-cols-2">
-          {filteredTopics.map((topic, index) => (
+          {filteredScenarios.map((scenario, index) => (
             <button
-              key={topic.id}
-              onClick={() => onTopicSelect?.(topic)}
+              key={`${scenario.topicId}-${scenario.id}`}
+              onClick={() => onTopicSelect?.(scenario)}
               className={`group relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br ${
                 palette[index % palette.length]
               } p-6 text-left shadow-2xl transition duration-300 hover:-translate-y-1 hover:shadow-[0_20px_45px_-15px_rgba(0,0,0,0.8)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60`}
@@ -104,14 +61,14 @@ const PracticeSelection = ({ onTopicSelect, onClose, categoryFilter }) => {
 
               <div className="relative flex h-full flex-col gap-6">
                 <div className="flex items-start justify-between">
-                  <span className="text-5xl drop-shadow-sm">{topic.icon}</span>
+                  <span className="text-5xl drop-shadow-sm">{scenario.topicIcon || "🎯"}</span>
                   <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/90 backdrop-blur">
-                    🎤 Voice Practice
+                    {scenario.topicTitle}
                   </span>
                 </div>
                 <div className="space-y-3">
-                  <h2 className="text-2xl font-semibold leading-tight">{topic.title}</h2>
-                  <p className="text-sm text-white/80">{topic.description}</p>
+                  <h2 className="text-2xl font-semibold leading-tight">{scenario.title}</h2>
+                  <p className="text-sm text-white/80">{scenario.description}</p>
                 </div>
                 <div className="mt-auto flex items-center justify-between text-sm font-semibold text-white/80">
                   <span className="inline-flex items-center gap-2">
@@ -125,9 +82,9 @@ const PracticeSelection = ({ onTopicSelect, onClose, categoryFilter }) => {
           ))}
         </section>
 
-        {!filteredTopics.length && (
+        {!filteredScenarios.length && (
           <div className="mt-20 rounded-3xl border border-white/10 bg-black/40 p-12 text-center backdrop-blur-lg">
-            <p className="text-lg text-white/80">No topics match that category. Try a different filter.</p>
+            <p className="text-lg text-white/80">No scenarios found yet. Try a different topic.</p>
           </div>
         )}
       </div>

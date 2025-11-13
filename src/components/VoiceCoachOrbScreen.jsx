@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import CleanVoiceService from '../services/CleanVoiceService';
 import { playVoiceResponseWithOpenAI, stopOpenAITTSPlayback } from '../services/openAITTSService';
 
-const MAX_VISIBLE_LINES = 5;
 const MAX_STORED_LINES = 40;
 
 const MISSING_SCENARIO_MESSAGE = 'We could not load this scenario. Please go back and choose another practice activity.';
@@ -13,6 +12,8 @@ const VoiceCoachOrbScreen = ({
   introLine,
   scenario,
   gradeLevel = '6',
+  learnerName: initialLearnerName = '',
+  introScripts = null,
   onEndSession
 }) => {
   const [isListening, setIsListening] = useState(false);
@@ -21,6 +22,9 @@ const VoiceCoachOrbScreen = ({
   const [error, setError] = useState(null);
   const [currentPhase, setCurrentPhase] = useState('intro');
   const [transcript, setTranscript] = useState([]);
+  const [learnerName, setLearnerName] = useState(initialLearnerName || null);
+
+  const resolvedGradeLevel = scenario?.gradeLevel || gradeLevel || '6';
 
   const recognitionRef = useRef(null);
   const isListeningRef = useRef(false);
@@ -123,6 +127,20 @@ const VoiceCoachOrbScreen = ({
     [cleanup, onEndSession]
   );
 
+  const guessLearnerName = useCallback((userText) => {
+    if (!userText) return null;
+    const lowered = userText.toLowerCase();
+    const explicitMatch = lowered.match(/(?:my name is|i am|i'm|im)\s+([a-z]+)/i);
+    if (explicitMatch && explicitMatch[1]) {
+      return explicitMatch[1];
+    }
+    const singleWord = userText.trim();
+    if (/^[A-Za-z]+$/.test(singleWord) && singleWord.length > 1 && singleWord.length <= 16) {
+      return singleWord;
+    }
+    return null;
+  }, []);
+
   const handleUserMessage = useCallback(
     async (rawText) => {
       const text = (rawText || '').trim();
@@ -141,11 +159,25 @@ const VoiceCoachOrbScreen = ({
       appendTranscript(text);
 
       try {
+        const toneHint = await CleanVoiceService.analyzeTone(text);
+        let updatedName = learnerName;
+        if (!updatedName) {
+          const potentialName = guessLearnerName(text);
+          if (potentialName) {
+            const normalizedName =
+              potentialName.charAt(0).toUpperCase() + potentialName.slice(1).toLowerCase();
+            setLearnerName(normalizedName);
+            updatedName = normalizedName;
+          }
+        }
+
         const response = await CleanVoiceService.generateResponse({
           conversationHistory: messagesRef.current,
           scenario,
-          gradeLevel,
-          phase: currentPhaseRef.current
+          gradeLevel: resolvedGradeLevel,
+          phase: currentPhaseRef.current,
+          toneHint,
+          learnerName: updatedName
         });
 
         const aiText = response?.aiResponse?.trim() ||
@@ -196,7 +228,7 @@ const VoiceCoachOrbScreen = ({
         setIsProcessing(false);
       }
     },
-    [appendTranscript, gradeLevel, handleSessionEnd, resumeListeningAfterDelay, scenario, setSpeakingState, speakText, stopListening]
+    [appendTranscript, resolvedGradeLevel, handleSessionEnd, learnerName, resumeListeningAfterDelay, scenario, setLearnerName, setSpeakingState, speakText, stopListening, guessLearnerName]
   );
 
   useEffect(() => {
@@ -208,6 +240,14 @@ const VoiceCoachOrbScreen = ({
       console.warn('[VoiceCoachOrbScreen] No scenario available. Intro flow aborted.');
       return;
     }
+
+    const scriptBundle = introScripts || scenario?.introScripts || null;
+    const compiledIntroLine = scriptBundle
+      ? [scriptBundle.greetingIntro, scriptBundle.scenarioIntro, scriptBundle.safetyAndConsent]
+          .filter(Boolean)
+          .join(' ')
+          .trim()
+      : null;
 
     stopListening();
     setSpeakingState(true);
@@ -227,7 +267,7 @@ const VoiceCoachOrbScreen = ({
         const aiIntro = await CleanVoiceService.generateResponse({
           conversationHistory: [],
           scenario,
-          gradeLevel,
+          gradeLevel: resolvedGradeLevel,
           phase: 'intro'
         });
         return aiIntro?.aiResponse?.trim();
@@ -240,7 +280,8 @@ const VoiceCoachOrbScreen = ({
     let advancedToPractice = false;
 
     try {
-      let resolvedIntro = introLine?.trim() || (await fetchIntroLine()) || buildFallbackIntro();
+      let resolvedIntro =
+        introLine?.trim() || compiledIntroLine || (await fetchIntroLine()) || buildFallbackIntro();
 
       appendTranscript(resolvedIntro);
       messagesRef.current = [{ role: 'assistant', content: resolvedIntro, phase: 'intro' }];
@@ -248,7 +289,9 @@ const VoiceCoachOrbScreen = ({
       await speakText(resolvedIntro);
 
       let scenarioLine = '';
-      if (typeof scenario === 'string') {
+      if (scriptBundle?.scenarioIntro) {
+        scenarioLine = scriptBundle.scenarioIntro.trim();
+      } else if (typeof scenario === 'string') {
         scenarioLine = scenario.trim();
       } else {
         scenarioLine =
@@ -301,7 +344,7 @@ const VoiceCoachOrbScreen = ({
         resumeListeningAfterDelay(1500);
       }
     }
-  }, [appendTranscript, gradeLevel, introLine, resumeListeningAfterDelay, scenario, speakText, stopListening]);
+  }, [appendTranscript, resolvedGradeLevel, introLine, introScripts, resumeListeningAfterDelay, scenario, speakText, stopListening]);
 
   useEffect(() => {
     console.debug('[VoiceCoachOrbScreen] Incoming props:', { introLine, scenario });
@@ -389,61 +432,41 @@ const VoiceCoachOrbScreen = ({
     };
   }, [cleanup, handleUserMessage, scenario, speakIntroAndScenario]);
 
-  const visibleTranscript = useMemo(() => transcript.slice(-MAX_VISIBLE_LINES), [transcript]);
-
-  const statusText = useMemo(() => {
-    if (isSpeaking) return 'Speaking...';
-    if (isListening) return 'Listening...';
-    if (isProcessing) return 'Processing...';
-    return 'Ready when you are';
-  }, [isListening, isProcessing, isSpeaking]);
+const statusText = useMemo(() => {
+  if (isSpeaking) return '🔊 Speaking...';
+  if (isListening) return '💡 Listening... speak naturally!';
+  if (isProcessing) return '🤖 Thinking...';
+  return 'Ready when you are';
+}, [isListening, isProcessing, isSpeaking]);
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-[#050914] via-[#02060f] to-[#000205] text-white flex flex-col">
-      <div className="w-full flex justify-end px-8 pt-8">
-        <button
-          type="button"
-          onClick={() => handleSessionEnd({ endedByUser: true })}
-          className="px-5 py-2 rounded-full border border-white/20 bg-white/10 text-sm font-semibold tracking-wide shadow-lg shadow-cyan-500/10 hover:bg-white/20 transition"
-        >
-          End Session
-        </button>
-      </div>
+    <div className="relative min-h-screen w-full bg-[#020412] text-white flex items-center justify-center overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(56,189,248,0.22),_transparent_55%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(15,118,246,0.12),_transparent_60%)]" />
 
-      <div className="flex flex-col items-center justify-center flex-1 px-4 text-center space-y-10">
-        <div className="relative flex items-center justify-center">
-          <div
-            className={`absolute inset-0 m-auto w-56 h-56 rounded-full blur-3xl transition-colors duration-700 ${
-              isSpeaking
-                ? 'bg-cyan-400/70 animate-pulse'
-                : isListening
-                ? 'bg-sky-400/40 animate-[pulse_3s_ease-in-out_infinite]'
-                : 'bg-sky-500/20'
-            }`}
-          />
-          <div
-            className={`relative w-44 h-44 rounded-full bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 shadow-[0_0_50px_rgba(56,189,248,0.55)] transition-transform duration-700 ${
-              isSpeaking ? 'scale-110' : isListening ? 'scale-105' : 'scale-100'
-            }`}
-          />
-        </div>
+      <div className="relative z-10 flex flex-col items-center text-center gap-8 px-6">
+        <div
+          className={`orb ${isSpeaking ? 'orb--speaking' : isListening ? 'orb--listening' : 'orb--idle'}`}
+        />
 
-        <div className="space-y-3 max-w-2xl w-full">
-          <p className="text-lg font-medium text-cyan-100 drop-shadow-sm">{statusText}</p>
-          {error && (
-            <p className="text-sm text-red-200 bg-red-500/10 border border-red-500/30 rounded-full px-4 py-2 inline-block">
-              {error}
-            </p>
-          )}
-        </div>
+        <p className="subtitle text-cyan-100 drop-shadow-sm">{statusText}</p>
 
-        <div className="w-full max-w-2xl max-h-48 overflow-y-auto bg-white/5 border border-white/10 rounded-3xl px-6 py-5 backdrop-blur-sm text-left space-y-2 text-base text-gray-200">
-          {visibleTranscript.map((line, index) => (
-            <p key={`transcript-${index}`} className="tracking-wide leading-relaxed">
+        <div className="flex flex-col gap-2 max-w-xl mt-4 text-white/90 text-sm">
+          {transcript.map((line, idx) => (
+            <p
+              key={idx}
+              className="bg-white/5 rounded-xl px-4 py-2 border border-white/10"
+            >
               {line}
             </p>
           ))}
         </div>
+
+        {error && (
+          <p className="text-sm text-rose-200 bg-rose-500/10 border border-rose-500/30 rounded-full px-4 py-2">
+            {error}
+          </p>
+        )}
       </div>
     </div>
   );
