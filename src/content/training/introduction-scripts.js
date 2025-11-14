@@ -8,6 +8,32 @@ import {
 
 const FALLBACK_PROMPT = 'What would you say first?';
 
+const normalizeKey = (value) => {
+  if (!value && value !== 0) return '';
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+};
+
+const resolveScenarioCandidates = (descriptor = '', scenarioOverride = null) => {
+  const candidates = [
+    descriptor,
+    scenarioOverride?.scriptKey,
+    scenarioOverride?.scenarioKey,
+    scenarioOverride?.topicId,
+    scenarioOverride?.topic,
+    scenarioOverride?.topicTitle,
+    scenarioOverride?.category,
+    scenarioOverride?.title
+  ]
+    .map(normalizeKey)
+    .filter(Boolean);
+
+  return Array.from(new Set(candidates));
+};
+
 const normalizeGradeInput = (gradeInput) => {
   const numericGrade =
     typeof gradeInput === 'number' ? gradeInput : parseInt(String(gradeInput).trim(), 10);
@@ -27,9 +53,9 @@ const ensureScenario = (topic, gradeLevel, fallbackScenario) => {
 
 export const getVoiceIntro = (gradeInput, topic = '', scenarioOverride = null) => {
   const { numericGrade, gradeRange } = normalizeGradeInput(gradeInput);
-
-  const gradeKey = gradeRange.toLowerCase(); // matches "k-2", "3-5", etc
-  const introString = gradeIntros[gradeKey] || gradeIntros['6-8'];
+  const gradeKey = (gradeRange || '6-8').toLowerCase();
+  const defaultGreeting = gradeIntros[gradeKey] || gradeIntros['6-8'];
+  const gradeConfig = INTRO_SEQUENCE_BY_GRADE[gradeKey] || INTRO_SEQUENCE_BY_GRADE['6-8'] || {};
 
   const scenarioDetails = ensureScenario(
     topic || scenarioOverride?.topicId || scenarioOverride?.topicTitle,
@@ -37,20 +63,57 @@ export const getVoiceIntro = (gradeInput, topic = '', scenarioOverride = null) =
     scenarioOverride
   );
 
+  const candidateKeys = resolveScenarioCandidates(topic, scenarioOverride);
+  const scenariosMap = gradeConfig.scenarios || {};
+  const availableKeys = Object.keys(scenariosMap);
+
+  const matchedEntry = Object.entries(scenariosMap).find(([key]) => {
+    const normalizedKey = normalizeKey(key);
+    return candidateKeys.some((candidate) => {
+      if (candidate === normalizedKey) return true;
+      if (candidate && normalizedKey.includes(candidate)) return true;
+      if (candidate && candidate.includes(normalizedKey)) return true;
+      return false;
+    });
+  });
+
+  console.log('[VoiceIntro Lookup]', {
+    gradeKey,
+    candidateKeys,
+    availableKeys,
+    matchedKey: matchedEntry ? matchedEntry[0] : null
+  });
+
+  const matchedScenario = matchedEntry?.[1] || null;
+
   const scenarioIntro =
+    matchedScenario?.intro ||
     scenarioDetails?.contextLine ||
     `Let's practice ${scenarioDetails?.topicTitle?.toLowerCase() || 'this skill'}.`;
 
-  const firstPrompt = scenarioDetails?.warmupQuestion || FALLBACK_PROMPT;
+  const firstPrompt =
+    matchedScenario?.firstPrompt ||
+    gradeConfig.firstPrompt ||
+    scenarioDetails?.warmupQuestion ||
+    FALLBACK_PROMPT;
+
+  const safetyAndConsent =
+    gradeConfig.safety ||
+    gradeConfig.consent ||
+    gradeConfig.safetyAndConsent ||
+    '';
+
+  const greetingIntro = matchedScenario?.greeting || gradeConfig.greeting || defaultGreeting;
 
   return {
-    greetingIntro: introString,
+    greetingIntro,
     scenarioIntro,
-    safetyAndConsent: '',
+    safetyAndConsent,
     firstPrompt,
     gradeRange,
     topicTitle: scenarioDetails?.topicTitle,
-    scenarioDetails
+    scenarioDetails,
+    matchedScenarioKey: matchedEntry?.[0] || null
   };
 };
 
@@ -434,6 +497,10 @@ export const getIntroductionSequence = (gradeInput = '6', scenarioKey = '') => {
   const firstPrompt =
     firstPromptByBand[gradeBandKey] ||
     'What sounds helpful to practice together right now?';
+  const fullIntroScript = [greetingIntro, scenarioIntro, safetyAndConsent]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
 
   return {
     introScript,
@@ -441,6 +508,7 @@ export const getIntroductionSequence = (gradeInput = '6', scenarioKey = '') => {
     scenarioIntro,
     safetyAndConsent,
     firstPrompt,
+    fullIntro: fullIntroScript,
     gradeRange,
     scenarios: script?.scenarios || {},
     scenarioScripts: SCENARIO_SCRIPT_LIBRARY,

@@ -105,22 +105,6 @@ export const useConversationTracking = (gradeLevel, scenario) => {
     setStudentSuccessRate(0);
   }, []);
 
-  useEffect(() => {
-    if (introInjectedRef.current) return;
-    if (currentPhase !== 'intro') return;
-    if (conversationHistory.length > 0) return;
-
-    const descriptor =
-      scenario?.topicId || scenario?.topic || scenario?.title || scenario?.category || '';
-    const introData = getVoiceIntro(gradeLevel, descriptor, scenario);
-    const introLine = introData?.firstPrompt || introData?.greetingIntro ||
-      "I'm your practice guide. Ready to try this together?";
-
-    console.log('[🎤 Intro Setup]', { currentPhase, introLine, descriptor });
-    addMessage('assistant', introLine, false, 'intro');
-    introInjectedRef.current = true;
-  }, [addMessage, conversationHistory.length, currentPhase, gradeLevel, scenario]);
-
   return {
     conversationHistory,
     currentPhase,
@@ -134,4 +118,3 @@ export const useConversationTracking = (gradeLevel, scenario) => {
 };
 
 export default useConversationTracking;
-

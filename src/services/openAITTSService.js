@@ -12,10 +12,24 @@ const OPENAI_API_KEY =
 
 const DEFAULT_MODEL = 'tts-1';
 const DEFAULT_VOICE = 'shimmer';
+const SILENT_MP3_DATA_URL =
+  'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU3LjgzLjEwMAAAAAAAAAAAAAAA//NAxAAAAANIAAAAABhkbHIAAAAAAAAAAABMYXZmNTcuODMuMTAw//NAxAAAAANIAAAAABxkYXRhAAAAAA==';
 
 let activeAudio = null;
 let activeAudioUrl = null;
 let openAIClient = null;
+let audioUnlocked = false;
+let pendingUnlockPromise = null;
+let sharedAudioContext = null;
+
+function ensureAudioContext() {
+  if (sharedAudioContext) return sharedAudioContext;
+  const AudioCtx =
+    (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)) || null;
+  if (!AudioCtx) return null;
+  sharedAudioContext = new AudioCtx();
+  return sharedAudioContext;
+}
 
 function getOpenAIClient() {
   if (openAIClient) return openAIClient;
@@ -48,6 +62,61 @@ function stopOpenAITTSPlayback() {
   }
 }
 
+export async function unlockAudio() {
+  if (audioUnlocked) return;
+  if (pendingUnlockPromise) {
+    await pendingUnlockPromise;
+    return;
+  }
+
+  const audioContext = ensureAudioContext();
+
+  if (audioContext) {
+    try {
+      if (audioContext.state === 'suspended') {
+        pendingUnlockPromise = audioContext.resume();
+        await pendingUnlockPromise;
+      }
+      audioUnlocked = true;
+      console.log('✅ Audio context unlocked via AudioContext.resume()');
+      pendingUnlockPromise = null;
+      return;
+    } catch (error) {
+      console.warn('⚠️ AudioContext resume failed, falling back to silent audio unlock.', error);
+      pendingUnlockPromise = null;
+    }
+  }
+
+  if (typeof Audio === 'undefined') {
+    audioUnlocked = true;
+    return;
+  }
+
+  const silentAudio = new Audio();
+  silentAudio.preload = 'auto';
+  silentAudio.muted = true;
+  silentAudio.loop = false;
+  silentAudio.src = SILENT_MP3_DATA_URL;
+
+  pendingUnlockPromise = silentAudio
+    .play()
+    .then(() => {
+      audioUnlocked = true;
+      console.log('✅ Audio element unlocked via silent playback');
+    })
+    .catch((error) => {
+      console.warn('⚠️ Audio unlock failed (user gesture required):', error);
+      throw error;
+    })
+    .finally(() => {
+      pendingUnlockPromise = null;
+      silentAudio.pause();
+      silentAudio.src = '';
+    });
+
+  return pendingUnlockPromise;
+}
+
 export async function playVoiceResponseWithOpenAI(text, options = {}) {
   const trimmed = (text ?? '').toString().trim();
   if (!trimmed) {
@@ -65,12 +134,23 @@ export async function playVoiceResponseWithOpenAI(text, options = {}) {
   const voice = options.voice || DEFAULT_VOICE;
   const model = options.model || DEFAULT_MODEL;
 
+  const ctxForPlayback = ensureAudioContext();
+  if (ctxForPlayback && ctxForPlayback.state === 'suspended') {
+    try {
+      await ctxForPlayback.resume();
+      console.log('🔈 AudioContext resumed before playback.');
+    } catch (resumeError) {
+      console.warn('⚠️ Unable to resume AudioContext prior to playback:', resumeError);
+    }
+  }
+
   let speech;
   try {
     speech = await client.audio.speech.create({
       model,
       voice,
-      input: trimmed
+      input: trimmed,
+      format: 'mp3'
     });
   } catch (error) {
     throw new Error(`OpenAI TTS failed: ${error?.message || 'Unknown error'}`);
@@ -84,7 +164,11 @@ export async function playVoiceResponseWithOpenAI(text, options = {}) {
   if (!audioBlob || audioBlob.size === 0) {
     throw new Error('OpenAI TTS returned invalid audio blob');
   }
-  console.log('📦 Audio Blob Size:', audioBlob.size);
+  console.log('📦 Audio blob details:', {
+    size: audioBlob.size,
+    type: audioBlob.type,
+    sizeKB: Number(audioBlob.size / 1024).toFixed(2)
+  });
 
   stopOpenAITTSPlayback();
 
@@ -92,13 +176,17 @@ export async function playVoiceResponseWithOpenAI(text, options = {}) {
   const audio = new Audio(audioUrl);
   audio.preload = 'auto';
   audio.onloadeddata = () => console.log('✅ Audio loaded');
-  audio.onerror = (e) => console.error('🔻 Audio error:', e);
+  audio.onerror = (event) => {
+    console.error('❌ Audio element error:', {
+      event,
+      src: audio.src,
+      networkState: audio.networkState,
+      readyState: audio.readyState,
+      errorCode: audio.error?.code,
+      errorMessage: audio.error?.message
+    });
+  };
   audio.addEventListener('canplaythrough', () => console.log('🎧 Audio can play through'), { once: true });
-
-  const test = new Audio('https://upload.wikimedia.org/wikipedia/commons/4/4e/Bird_call_in_mangrove.ogg');
-  test.play().catch((err) => {
-    console.warn('Test audio play blocked:', err);
-  });
 
   activeAudio = audio;
   activeAudioUrl = audioUrl;
@@ -148,4 +236,4 @@ export async function playVoiceResponseWithOpenAI(text, options = {}) {
   });
 }
 
-export { stopOpenAITTSPlayback };
+export { stopOpenAITTSPlayback, ensureAudioContext };

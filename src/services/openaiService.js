@@ -26,12 +26,14 @@ export async function generateConversationResponse({
   learnerName = null
 }) {
   try {
+    const history = Array.isArray(conversationHistory) ? conversationHistory : [];
+    const historyForAI = currentPhase === 'intro' ? [] : history;
     console.log('🤖 Generating Social Cue response...');
     console.log('📍 Phase:', currentPhase, '| Character mode:', isInCharacterMode);
     console.log('🎓 Grade:', gradeLevel, '| Scenario:', scenario?.title);
 
     const timing = standaloneContentService.getTimingForGrade(gradeLevel);
-    const exchangeCount = Math.floor(conversationHistory.length / 2);
+    const exchangeCount = Math.floor(history.length / 2);
 
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('🎤 GENERATING AI RESPONSE');
@@ -41,7 +43,7 @@ export async function generateConversationResponse({
 
     const curriculumScript = await deriveCurriculumScript(
       currentPhase,
-      conversationHistory,
+      history,
       gradeLevel,
       scenario,
       learnerName
@@ -69,7 +71,7 @@ export async function generateConversationResponse({
     }
 
     if (introPromptPayload?.prompt) {
-      const introLine = await fulfillShortIntroPrompt(introPromptPayload.prompt);
+      const introLine = await fulfillShortIntroPrompt(introPromptPayload);
       const resolvedIntro = introLine || buildFallbackIntroText(introPromptPayload.fallbackIntro);
       if (resolvedIntro) {
         return {
@@ -96,7 +98,7 @@ export async function generateConversationResponse({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          conversationHistory,
+          conversationHistory: historyForAI,
           scenario,
           gradeLevel,
           phase: currentPhase,
@@ -135,7 +137,7 @@ export async function generateConversationResponse({
     }
 
     if (!apiSucceeded) {
-      const fallbackMessages = (conversationHistory || [])
+      const fallbackMessages = historyForAI
         .map((msg) => {
           const content = String(msg?.content || msg?.text || '').trim();
           if (!content) return null;
@@ -209,7 +211,7 @@ When you receive a message that says "RESPOND WITH EXACTLY: [text]", you MUST re
       exchangeCount: exchangeCount,
       validation: validation,
       hasEvaluation: false,
-      feedback: nextPhase === 'complete' ? generateSessionFeedback(conversationHistory) : null
+      feedback: nextPhase === 'complete' ? generateSessionFeedback(history) : null
     };
 
   } catch (error) {
@@ -277,11 +279,30 @@ async function deriveCurriculumScript(currentPhase, conversationHistory, gradeLe
     const topicDescriptor =
       scenario?.topicId || scenario?.topic || scenario?.topicTitle || scenario?.title || '';
     const introData = getVoiceIntro(gradeLevel, topicDescriptor, scenario) || {};
+    const baseIntroScript = [
+      introData.greetingIntro,
+      introData.scenarioIntro,
+      introData.safetyAndConsent
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
 
     if (turnCount === 0) {
       const scenarioTitle = scenario?.title || topicDescriptor || 'a real-life moment';
+      const scenarioTopic =
+        scenario?.topic ||
+        scenario?.topicTitle ||
+        scenario?.category ||
+        topicDescriptor ||
+        scenarioTitle;
       const gradeLabel = gradeLevel || '6-8';
       const learnerLine = learnerName ? `- Learner name: ${learnerName}` : '';
+      const coachingTip =
+        scenario?.coachingTip ||
+        scenario?.tip ||
+        scenarioTopic ||
+        'Take a calm breath, smile, and keep it friendly.';
 
       const shortIntroPrompt = `
 You are a friendly and encouraging voice-based conversation coach designed to help K–12 learners practice real-world social skills. Your tone should always be:
@@ -319,7 +340,12 @@ Your response should be one warm, natural, short intro line — nothing else.
       return {
         type: 'short-intro-prompt',
         prompt: shortIntroPrompt,
-        fallbackIntro: introData
+        fallbackIntro: introData,
+        scenarioTitle,
+        scenarioTopic,
+        baseIntroScript,
+        learnerName,
+        coachingTip
       };
     }
 
@@ -336,17 +362,47 @@ Your response should be one warm, natural, short intro line — nothing else.
   }
 }
 
-async function fulfillShortIntroPrompt(promptText) {
+async function fulfillShortIntroPrompt(introConfig) {
+  if (!introConfig || typeof introConfig !== 'object') {
+    return null;
+  }
+
+  const { scenarioTitle, scenarioTopic, baseIntroScript, learnerName, coachingTip } = introConfig;
+
+  const friendlyName = (learnerName && learnerName.trim()) || 'friend';
+  const topicSummary = scenarioTitle || scenarioTopic || 'a real-life social moment';
+  const tipLine =
+    (coachingTip && coachingTip.trim()) || 'Tip: Take a calm breath and keep your tone kind.';
+  const paraphraseGuide = baseIntroScript
+    ? `Paraphrase this base script in your own natural words: "${baseIntroScript}".`
+    : '';
+
+  const systemPrompt = `You are Cue, a warm and encouraging AI practice buddy for kids and teens. Always lead the session confidently. Your intro must: 1) greet ${friendlyName} by name (or say "friend" if unknown) and say you’re ready to practice together, 2) mention you’ll work on ${topicSummary}, and 3) share this coaching tip: "${tipLine}". Keep everything under 40 words. Do not ask what they want to practice or pose other questions. End with a gentle pause like “Let’s dive in.”`;
+
+  const userPrompt = `${paraphraseGuide} Generate a single spoken intro line now that follows those rules.`;
+
   try {
+    console.log('📤 Sending intro prompt to OpenAI (system + user message)...');
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       temperature: 0.8,
       max_tokens: 120,
-      messages: [{ role: 'system', content: promptText }]
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt
+        },
+        {
+          role: 'user',
+          content: userPrompt
+        }
+      ]
     });
 
     const introLine = completion.choices?.[0]?.message?.content?.trim();
-    return introLine ? introLine.replace(/\s+/g, ' ').trim() : null;
+
+    if (!introLine) return null;
+    return introLine.replace(/\s+/g, ' ').trim();
   } catch (error) {
     console.warn('⚠️ Short intro prompt failed:', error?.message || error);
     return null;

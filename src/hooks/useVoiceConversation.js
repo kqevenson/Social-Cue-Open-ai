@@ -158,7 +158,12 @@ export default function useVoiceConversation({ scenario, gradeLevel = '6', onSes
   }, [addMessage, scheduleSilenceTimeout]);
 
   const startConversation = useCallback(async () => {
-    console.log('🎬 Starting conversation with AIResponseService');
+    if (sessionActiveRef.current) {
+      console.log('⚠️ startConversation called while session is already active. Ignoring.');
+      return;
+    }
+
+    console.log('🎯 Starting conversation (user initiated)');
     resetTimers();
     sessionActiveRef.current = true;
     setIsAIThinking(true);

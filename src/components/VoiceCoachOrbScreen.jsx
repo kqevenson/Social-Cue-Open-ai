@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import localforage from 'localforage';
 import CleanVoiceService from '../services/CleanVoiceService';
-import { playVoiceResponseWithOpenAI, stopOpenAITTSPlayback } from '../services/openAITTSService';
+import { playVoiceResponseWithOpenAI, stopOpenAITTSPlayback, unlockAudio } from '../services/openAITTSService';
 
 const MAX_STORED_LINES = 40;
 const PHASE_STORAGE_KEY = 'voiceCoach:lastPhase';
@@ -24,6 +24,9 @@ const VoiceCoachOrbScreen = ({
   const [learnerName, setLearnerName] = useState(initialLearnerName || null);
   const [phaseRestored, setPhaseRestored] = useState(false);
   const [userPrompt, setUserPrompt] = useState('Ready when you are');
+  const [sessionPrimed, setSessionPrimed] = useState(false);
+  const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
+  const [showStartButton, setShowStartButton] = useState(true);
 
   const resolvedGradeLevel = scenario?.gradeLevel || gradeLevel || '6';
 
@@ -358,7 +361,7 @@ const VoiceCoachOrbScreen = ({
       return;
     }
 
-    if (!phaseRestored) {
+    if (!phaseRestored || !sessionPrimed) {
       return;
     }
 
@@ -464,7 +467,7 @@ const VoiceCoachOrbScreen = ({
       cancelledRef.current = true;
       cleanup();
     };
-  }, [cleanup, handleUserMessage, phaseRestored, resumeListeningAfterDelay, scenario, speakIntroAndScenario]);
+  }, [cleanup, handleUserMessage, phaseRestored, resumeListeningAfterDelay, scenario, sessionPrimed, speakIntroAndScenario]);
 
   useEffect(() => {
     let cancelled = false;
@@ -499,14 +502,51 @@ const VoiceCoachOrbScreen = ({
   }, [appendTranscript, scenario, transcript.length]);
 
 const statusText = useMemo(() => {
+  if (!sessionPrimed) return 'Tap start to unlock audio and begin.';
   if (isSpeaking) return '🔊 Speaking...';
   if (isListening) return '💡 Listening... speak naturally!';
   if (isProcessing) return '🤖 Thinking...';
   return 'Ready when you are';
-}, [isListening, isProcessing, isSpeaking]);
+}, [isListening, isProcessing, isSpeaking, sessionPrimed]);
+
+  const handleStartPractice = useCallback(async () => {
+    if (isAudioUnlocked) {
+      setShowStartButton(false);
+      setSessionPrimed(true);
+      setError(null);
+      return;
+    }
+
+    try {
+      await unlockAudio();
+      setIsAudioUnlocked(true);
+      setShowStartButton(false);
+      setSessionPrimed(true);
+      setError(null);
+    } catch (unlockError) {
+      console.error('Failed to unlock audio context:', unlockError);
+      const message = unlockError?.message || unlockError?.toString() || '';
+      if (message.includes('NotSupportedError')) {
+        setError('Audio playback is blocked. Try tapping again or switch browsers.');
+      } else {
+        setError('Tap the start button so we can enable audio.');
+      }
+    }
+  }, [isAudioUnlocked]);
 
   return (
     <div className="relative min-h-screen w-full bg-[#020412] text-white flex items-center justify-center overflow-hidden">
+      {showStartButton && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-50">
+          <button
+            type="button"
+            onClick={handleStartPractice}
+            className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-4 rounded-2xl text-xl font-bold shadow-2xl hover:scale-[1.02] transition-transform"
+          >
+            🎤 Start Practice
+          </button>
+        </div>
+      )}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(56,189,248,0.22),_transparent_55%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(15,118,246,0.12),_transparent_60%)]" />
 

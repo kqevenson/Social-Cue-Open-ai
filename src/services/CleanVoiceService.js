@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { getIntroductionSequence } from '../content/training/introduction-scripts';
+import { conversationFlow } from '../content/training/aibehaviorconfig';
 
 const openai = new OpenAI({
   apiKey: import.meta.env.VITE_OPENAI_API_KEY,
@@ -52,10 +53,17 @@ class CleanVoiceService {
       if (match) return match[0];
       return str;
     })();
+    const gradeWordLimit =
+      conversationFlow?.turnTaking?.wordLimits?.[gradeString.toUpperCase()] ||
+      conversationFlow?.stopTalk?.talk?.maxWords ||
+      40;
 
-    const userTurns = conversationHistory.filter(
-      (m) => m?.role === 'user' && ((m?.text ?? '').trim() || (m?.content ?? '').trim())
-    ).length;
+    const userTurns = Math.max(
+      0,
+      conversationHistory.filter(
+        (m) => m?.role === 'user' && ((m?.text ?? '').trim() || (m?.content ?? '').trim())
+      ).length
+    );
     console.log('🧪 CleanVoiceService turnCount:', userTurns, conversationHistory);
 
     const normalizedPhase = (() => {
@@ -94,11 +102,9 @@ class CleanVoiceService {
       microCoachTips,
       scenarioScripts,
       fallbackScenario,
-      scenarios
+      scenarios,
+      fullIntro
     } = introSequenceConfig || {};
-
-    const baseIntroScriptParts = [greetingIntro, scenarioIntro, safetyAndConsent].filter(Boolean);
-    const baseIntroScript = baseIntroScriptParts.join(' ');
 
     const normalizedScenarioKey = resolvedScenarioKey;
 
@@ -119,6 +125,11 @@ class CleanVoiceService {
     const scenarioScript = gradeScenarioEntry || libraryScenarioEntry || fallbackScenario || {};
 
     const scenarioIntroScript = scenarioScript?.intro || scenarioIntro || null;
+    const baseIntroScriptParts = [fullIntro, scenarioIntroScript].filter(Boolean);
+    const baseIntroScript = baseIntroScriptParts.length
+      ? baseIntroScriptParts.join(' ')
+      : "Hi! I’m your practice buddy. Let’s warm up together. Ready to give it a go?";
+    const fullIntroScript = (baseIntroScript || '').trim();
 
     const needsLearnerName = !learnerName || !String(learnerName).trim();
 
@@ -144,6 +155,10 @@ class CleanVoiceService {
       scenario?.prompt ||
       'How would you respond?';
 
+    console.log('🧠 Resolved scenarioKey:', resolvedScenarioKey);
+    console.log('🧠 scenarioIntroScript:', scenarioIntroScript);
+    console.log('🧠 baseIntroScript:', baseIntroScript);
+    console.log('🧠 introSequence.firstPrompt:', introSequenceConfig?.firstPrompt);
     console.log('[Cue Script Lookup]', {
       gradeLevel: gradeString,
       scenarioKey: resolvedScenarioKey,
@@ -194,6 +209,11 @@ class CleanVoiceService {
     const randomMicroTip =
       microCoachTipsSafe[Math.floor(Math.random() * microCoachTipsSafe.length)] ||
       'Take a breath, keep it friendly, and try one small step.';
+    const scenarioTip =
+      scenario?.coachingTip ||
+      scenarioScript?.afterResponse ||
+      scenarioScript?.practicePrompt ||
+      randomMicroTip;
 
     const latestLearnerMessage =
       [...conversationHistory]
@@ -214,25 +234,11 @@ class CleanVoiceService {
       const coachTeacherLine = 'You are both a friendly coach and a supportive teacher.';
 
       if (userTurns === 0) {
-        if (needsLearnerName) {
-          systemPrompt = `${baseIdentity}
+        systemPrompt = `${baseIdentity}
 ${coachTeacherLine}
-You do not know the learner's name yet.
-Greet them warmly and explain you’ll be their coach and teacher today.
-Ask what you should call them in one short friendly question.
-Do not share tips or the scenario yet.
-Keep it to two short sentences (under 35 words total).`;
-        } else {
-          systemPrompt = `${baseIdentity}
-${coachTeacherLine}
-You already know the learner's name is ${learnerName}. Use it once.
-Open with a warm greeting that blends coaching and teaching.
-Share two upbeat tips like: ${tipsGuidance}
-Then guide them into this scene: "${scenarioScene}"
-Finish with one guiding question similar to: "${scenarioQuestion}"
-Do not ask what they want to learn.
-Keep it to three short sentences (under 55 words total).`;
-        }
+You must deliver a warm paraphrase of this intro script: "${baseIntroScript}".
+After that, ask a short question like: "${effectiveFirstPrompt}".
+Keep it to two sentences total.`;
       } else {
         if (needsLearnerName) {
           systemPrompt = `${baseIdentity}
@@ -295,8 +301,42 @@ Celebrate their effort and close the session with encouragement to keep practici
 
     const includeFewShot = normalizedPhase !== 'intro' || userTurns >= 2;
 
+    const toneVariations = [
+      'pep talk energy',
+      'curious, thoughtful tone',
+      'cheerful mentor voice',
+      'calm, confident coach vibe',
+      'playful teammate energy',
+      'gentle, encouraging whisper'
+    ];
+    const toneModifier = toneVariations[Math.floor(Math.random() * toneVariations.length)];
+    const scenarioTopicLabel =
+      scenario?.topic ||
+      scenario?.topicTitle ||
+      scenario?.category ||
+      scenarioScene;
+    const scenarioSkillFocus =
+      scenario?.skill ||
+      scenario?.focus ||
+      scenario?.goal ||
+      'building real conversation confidence';
+    const friendlyName = learnerName?.trim() || 'friend';
+    const closingVariants = [
+      'Ready to dive in?',
+      'Want to give it a go?',
+      'Let’s try it out!',
+      'Wanna jump in with me?',
+      'Ready to roll?'
+    ];
+    const closingPrompt = closingVariants[Math.floor(Math.random() * closingVariants.length)];
+    const introPrepMessage =
+      normalizedPhase === 'intro' && userTurns === 0
+        ? `Session marker: ${Date.now()}. You must generate 1-2 short sentences (max ${gradeWordLimit} words total) that sound like Cue, a supportive older friend. Tone modifier: ${toneModifier}. Learner name: ${friendlyName}. Grade level: ${gradeString}. Scenario topic: "${scenarioTopicLabel}". Skill focus: "${scenarioSkillFocus}". Helpful tip to include: "${scenarioTip}". Use varied phrasing like "let’s try", "here’s the plan", or "today we’re gonna" so no two intros feel the same. Mention the scenario, weave in the tip, keep it casual, and end with a friendly invitation such as "${closingPrompt}". Never ask what they want to work on.`
+        : null;
+
     const messages = [
       { role: 'system', content: systemPrompt },
+      ...(introPrepMessage ? [{ role: 'user', content: introPrepMessage }] : []),
       ...(includeFewShot ? fewShot : []),
       ...conversationHistory
         .filter((msg) => (msg?.text || msg?.content || '').trim())
@@ -309,13 +349,19 @@ Celebrate their effort and close the session with encouragement to keep practici
     console.log('🧠 [generateResponse] Phase:', normalizedPhase);
     console.log('🧠 [generateResponse] scenarioScript keys:', Object.keys(scenarioScript || {}));
     console.log('🧠 [generateResponse] gradePrompt:', gradePrompts[gradeString]);
+    console.log('[🧠 SYSTEM PROMPT]', systemPrompt);
     console.log('[DEBUG] Sending to OpenAI:', messages);
+
+    const modelTemperature =
+      normalizedPhase === 'intro' && userTurns === 0
+        ? 0.95
+        : 0.6;
 
     try {
       const response = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages,
-        temperature: 0.6,
+        temperature: modelTemperature,
         max_tokens: 160
       });
 
