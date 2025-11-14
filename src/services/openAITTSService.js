@@ -48,11 +48,14 @@ function stopOpenAITTSPlayback() {
   }
 }
 
-async function playVoiceResponseWithOpenAI(text, options = {}) {
+export async function playVoiceResponseWithOpenAI(text, options = {}) {
   const trimmed = (text ?? '').toString().trim();
   if (!trimmed) {
     throw new Error('Cannot synthesize empty text');
   }
+
+  console.log('🟢 Requesting OpenAI TTS with input:', trimmed);
+  console.log('📢 Intro text length:', trimmed.length);
 
   if (typeof Audio === 'undefined') {
     throw new Error('Audio playback is not supported in this environment');
@@ -74,13 +77,29 @@ async function playVoiceResponseWithOpenAI(text, options = {}) {
   }
 
   const audioBuffer = await speech.arrayBuffer();
+  if (!audioBuffer || audioBuffer.byteLength === 0) {
+    throw new Error('OpenAI TTS returned empty audio buffer');
+  }
   const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
-  const audioUrl = URL.createObjectURL(audioBlob);
+  if (!audioBlob || audioBlob.size === 0) {
+    throw new Error('OpenAI TTS returned invalid audio blob');
+  }
+  console.log('📦 Audio Blob Size:', audioBlob.size);
 
   stopOpenAITTSPlayback();
 
+  const audioUrl = URL.createObjectURL(audioBlob);
   const audio = new Audio(audioUrl);
   audio.preload = 'auto';
+  audio.onloadeddata = () => console.log('✅ Audio loaded');
+  audio.onerror = (e) => console.error('🔻 Audio error:', e);
+  audio.addEventListener('canplaythrough', () => console.log('🎧 Audio can play through'), { once: true });
+
+  const test = new Audio('https://upload.wikimedia.org/wikipedia/commons/4/4e/Bird_call_in_mangrove.ogg');
+  test.play().catch((err) => {
+    console.warn('Test audio play blocked:', err);
+  });
+
   activeAudio = audio;
   activeAudioUrl = audioUrl;
 
@@ -95,6 +114,7 @@ async function playVoiceResponseWithOpenAI(text, options = {}) {
     };
 
     audio.onended = () => {
+      console.log('🔚 Audio finished');
       stopOpenAITTSPlayback();
       options.onEnded?.();
       resolve();
@@ -104,16 +124,28 @@ async function playVoiceResponseWithOpenAI(text, options = {}) {
       handleError(new Error('Audio playback failed'));
     };
 
-    const playPromise = audio.play();
+    const startPlayback = () => {
+      audio.removeEventListener('canplaythrough', startPlayback);
+      try {
+        const playPromise = audio.play();
+        if (playPromise?.then) {
+          playPromise
+            .then(() => options.onStart?.())
+            .catch(handleError);
+        } else {
+          options.onStart?.();
+        }
+      } catch (error) {
+        handleError(error);
+      }
+    };
 
-    if (playPromise?.then) {
-      playPromise
-        .then(() => options.onStart?.())
-        .catch(handleError);
-    } else {
-      options.onStart?.();
+    audio.addEventListener('canplaythrough', startPlayback, { once: true });
+
+    if (audio.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
+      startPlayback();
     }
   });
 }
 
-export { playVoiceResponseWithOpenAI, stopOpenAITTSPlayback };
+export { stopOpenAITTSPlayback };

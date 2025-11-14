@@ -22,7 +22,8 @@ export async function generateConversationResponse({
   lessonId = null,
   isInCharacterMode = false,
   characterRole = null,
-  characterExchangeCount = 0
+  characterExchangeCount = 0,
+  learnerName = null
 }) {
   try {
     console.log('🤖 Generating Social Cue response...');
@@ -38,14 +39,15 @@ export async function generateConversationResponse({
     console.log('Turn count:', conversationHistory.length);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    const curriculumScript = deriveCurriculumScript(
+    const curriculumScript = await deriveCurriculumScript(
       currentPhase,
       conversationHistory,
       gradeLevel,
-      scenario
+      scenario,
+      learnerName
     );
 
-    if (curriculumScript) {
+    if (curriculumScript && typeof curriculumScript === 'string') {
       console.log('✅ Curriculum script found for phase:', currentPhase);
       return {
         response: curriculumScript,
@@ -59,6 +61,30 @@ export async function generateConversationResponse({
         hasEvaluation: false,
         feedback: null
       };
+    }
+
+    let introPromptPayload = null;
+    if (curriculumScript && typeof curriculumScript === 'object' && curriculumScript.type === 'short-intro-prompt') {
+      introPromptPayload = curriculumScript;
+    }
+
+    if (introPromptPayload?.prompt) {
+      const introLine = await fulfillShortIntroPrompt(introPromptPayload.prompt);
+      const resolvedIntro = introLine || buildFallbackIntroText(introPromptPayload.fallbackIntro);
+      if (resolvedIntro) {
+        return {
+          response: resolvedIntro,
+          phase: currentPhase,
+          aiResponse: resolvedIntro,
+          text: resolvedIntro,
+          shouldContinue: true,
+          nextPhase: currentPhase,
+          exchangeCount: exchangeCount,
+          validation: { valid: true, warnings: [] },
+          hasEvaluation: false,
+          feedback: null
+        };
+      }
     }
 
     let aiResponse = '';
@@ -239,7 +265,7 @@ function generateSessionFeedback(conversationHistory) {
   };
 }
 
-function deriveCurriculumScript(currentPhase, conversationHistory, gradeLevel, scenario) {
+async function deriveCurriculumScript(currentPhase, conversationHistory, gradeLevel, scenario, learnerName) {
   try {
     const turnCount = conversationHistory.length;
 
@@ -250,12 +276,51 @@ function deriveCurriculumScript(currentPhase, conversationHistory, gradeLevel, s
 
     const topicDescriptor =
       scenario?.topicId || scenario?.topic || scenario?.topicTitle || scenario?.title || '';
-    const introData = getVoiceIntro(gradeLevel, topicDescriptor, scenario);
+    const introData = getVoiceIntro(gradeLevel, topicDescriptor, scenario) || {};
 
     if (turnCount === 0) {
-      const firstLine = `${introData.greetingIntro} ${introData.scenarioIntro}`.replace(/\s+/g, ' ').trim();
-      console.log('✅ Using topic-based intro:', firstLine);
-      return firstLine;
+      const scenarioTitle = scenario?.title || topicDescriptor || 'a real-life moment';
+      const gradeLabel = gradeLevel || '6-8';
+      const learnerLine = learnerName ? `- Learner name: ${learnerName}` : '';
+
+      const shortIntroPrompt = `
+You are a friendly and encouraging voice-based conversation coach designed to help K–12 learners practice real-world social skills. Your tone should always be:
+- supportive
+- conversational (not robotic)
+- clear and age-appropriate
+
+Your current task is to generate a short, natural-sounding **introduction line** (1–2 sentences) to start a conversation practice session.
+
+Use the following context:
+- Scenario: ${scenarioTitle}
+- Grade level: ${gradeLabel}
+${learnerLine ? `${learnerLine}\n` : ''}
+🔹 YOUR INTRO SHOULD:
+- Greet the learner in a casual, friendly way (use their name if provided)
+- Briefly describe the social situation they’ll be practicing — without using technical words like “scenario” or “topic”
+- Be short, friendly, and sound like a real person
+- Use language that fits the learner’s grade level
+- Feel fresh and slightly different each time — not templated
+
+❌ DO NOT:
+- Mention being an AI or a coach
+- Use the words “scenario,” “topic,” “phase,” or “practice round”
+- Over-explain or sound formal
+
+🔸 EXAMPLES:
+- “Hey! You’re about to ask a classmate to hang out—let’s practice.”
+- “Hi there! Ready to try jumping into a group conversation?”
+- “Nice to see you. Let’s imagine you’re joining a new lunch table.”
+- “Okay, picture this: you want to talk to someone you don’t know well.”
+
+Your response should be one warm, natural, short intro line — nothing else.
+`.trim();
+
+      return {
+        type: 'short-intro-prompt',
+        prompt: shortIntroPrompt,
+        fallbackIntro: introData
+      };
     }
 
     if (turnCount === 2) {
@@ -269,6 +334,32 @@ function deriveCurriculumScript(currentPhase, conversationHistory, gradeLevel, s
     console.warn('⚠️ Unable to load curriculum script:', error.message);
     return null;
   }
+}
+
+async function fulfillShortIntroPrompt(promptText) {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      temperature: 0.8,
+      max_tokens: 120,
+      messages: [{ role: 'system', content: promptText }]
+    });
+
+    const introLine = completion.choices?.[0]?.message?.content?.trim();
+    return introLine ? introLine.replace(/\s+/g, ' ').trim() : null;
+  } catch (error) {
+    console.warn('⚠️ Short intro prompt failed:', error?.message || error);
+    return null;
+  }
+}
+
+function buildFallbackIntroText(introData = {}) {
+  const fallbackLine = `${introData.greetingIntro || ''} ${introData.scenarioIntro || ''}`
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (fallbackLine) return fallbackLine;
+  if (introData.firstPrompt) return introData.firstPrompt;
+  return "Let's get warmed up—ready to try a quick practice?";
 }
 
 export default {

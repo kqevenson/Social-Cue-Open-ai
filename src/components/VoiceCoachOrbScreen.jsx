@@ -1,19 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import localforage from 'localforage';
 import CleanVoiceService from '../services/CleanVoiceService';
 import { playVoiceResponseWithOpenAI, stopOpenAITTSPlayback } from '../services/openAITTSService';
 
 const MAX_STORED_LINES = 40;
+const PHASE_STORAGE_KEY = 'voiceCoach:lastPhase';
 
 const MISSING_SCENARIO_MESSAGE = 'We could not load this scenario. Please go back and choose another practice activity.';
-const MISSING_INTRO_MESSAGE = 'Intro line was missing. Generating a new greeting...';
 const INTRO_RETRY_DELAY = 1500;
 
 const VoiceCoachOrbScreen = ({
-  introLine,
   scenario,
   gradeLevel = '6',
   learnerName: initialLearnerName = '',
-  introScripts = null,
   onEndSession
 }) => {
   const [isListening, setIsListening] = useState(false);
@@ -23,6 +22,8 @@ const VoiceCoachOrbScreen = ({
   const [currentPhase, setCurrentPhase] = useState('intro');
   const [transcript, setTranscript] = useState([]);
   const [learnerName, setLearnerName] = useState(initialLearnerName || null);
+  const [phaseRestored, setPhaseRestored] = useState(false);
+  const [userPrompt, setUserPrompt] = useState('Ready when you are');
 
   const resolvedGradeLevel = scenario?.gradeLevel || gradeLevel || '6';
 
@@ -36,6 +37,17 @@ const VoiceCoachOrbScreen = ({
   const isSpeakingRef = useRef(false);
   const shouldIgnoreInputRef = useRef(true);
   const listeningTimeoutRef = useRef(null);
+
+  const persistPhase = useCallback(async (phaseValue) => {
+    if (!phaseValue) return;
+    try {
+      currentPhaseRef.current = phaseValue;
+      setCurrentPhase(phaseValue);
+      await localforage.setItem(PHASE_STORAGE_KEY, phaseValue);
+    } catch (storageError) {
+      console.warn('[VoiceCoachOrbScreen] Unable to persist phase:', storageError);
+    }
+  }, []);
 
   const appendTranscript = useCallback((line) => {
     if (!line) return;
@@ -61,6 +73,9 @@ const VoiceCoachOrbScreen = ({
     isListeningRef.current = false;
     setIsListening(false);
     stopOpenAITTSPlayback();
+    localforage.removeItem(PHASE_STORAGE_KEY).catch((storageError) => {
+      console.warn('[VoiceCoachOrbScreen] Unable to clear persisted phase:', storageError);
+    });
   }, []);
 
   const startListening = useCallback(() => {
@@ -187,18 +202,17 @@ const VoiceCoachOrbScreen = ({
           { role: 'assistant', content: aiText, phase: response?.phase || currentPhaseRef.current }
         ];
 
-        appendTranscript(aiText);
-
-        if (response?.phase && response.phase !== currentPhaseRef.current) {
-          console.log('[PHASE] before change:', currentPhaseRef.current);
-          currentPhaseRef.current = response.phase;
-          setCurrentPhase(response.phase);
-          console.log('[PHASE] after change:', currentPhaseRef.current);
+        const prevPhase = currentPhaseRef.current;
+        const nextPhase = response?.phase || prevPhase;
+        if (nextPhase !== prevPhase) {
+          console.log('[PHASE] before change:', prevPhase);
+        }
+        await persistPhase(nextPhase);
+        if (nextPhase !== prevPhase) {
+          console.log('[PHASE] after change:', nextPhase);
         }
 
-        setSpeakingState(true);
-        await speakText(aiText);
-        setSpeakingState(false);
+        appendTranscript(aiText);
 
         if (response?.phase === 'complete') {
           handleSessionEnd({ phase: 'complete' });
@@ -228,7 +242,7 @@ const VoiceCoachOrbScreen = ({
         setIsProcessing(false);
       }
     },
-    [appendTranscript, resolvedGradeLevel, handleSessionEnd, learnerName, resumeListeningAfterDelay, scenario, setLearnerName, setSpeakingState, speakText, stopListening, guessLearnerName]
+    [appendTranscript, resolvedGradeLevel, handleSessionEnd, learnerName, persistPhase, resumeListeningAfterDelay, scenario, setLearnerName, setSpeakingState, speakText, stopListening, guessLearnerName]
   );
 
   useEffect(() => {
@@ -241,82 +255,71 @@ const VoiceCoachOrbScreen = ({
       return;
     }
 
-    const scriptBundle = introScripts || scenario?.introScripts || null;
-    const compiledIntroLine = scriptBundle
-      ? [scriptBundle.greetingIntro, scriptBundle.scenarioIntro, scriptBundle.safetyAndConsent]
-          .filter(Boolean)
-          .join(' ')
-          .trim()
-      : null;
-
     stopListening();
     setSpeakingState(true);
     setError(null);
-    console.log('[PHASE] before change:', currentPhaseRef.current);
-    currentPhaseRef.current = 'intro';
-    setCurrentPhase('intro');
-    console.log('[PHASE] after change:', currentPhaseRef.current);
 
-    const buildFallbackIntro = () => `Hi, I'm Cue — let's practice ${
-      scenario?.title || 'a real conversation'
-    } together. Ready?`;
+    const prevPhase = currentPhaseRef.current;
+    if (prevPhase !== 'intro') {
+      console.log('[PHASE] before change:', prevPhase);
+    }
+    await persistPhase('intro');
+    if (prevPhase !== 'intro') {
+      console.log('[PHASE] after change:', currentPhaseRef.current);
+    }
 
-    const fetchIntroLine = async () => {
+    let introResponse = null;
+    const fetchIntroResponse = async () => {
       try {
         console.debug('[VoiceCoachOrbScreen] Generating intro line via CleanVoiceService');
-        const aiIntro = await CleanVoiceService.generateResponse({
+        const aiResponsePayload = await CleanVoiceService.generateResponse({
           conversationHistory: [],
           scenario,
           gradeLevel: resolvedGradeLevel,
-          phase: 'intro'
+          phase: 'intro',
+          learnerName: learnerName || null
         });
-        return aiIntro?.aiResponse?.trim();
+        console.log('[VoiceCoachOrbScreen] 🔄 AI intro response:', {
+          scenarioKey: scenario?.scriptKey || scenario?.topicId || scenario?.id,
+          response: aiResponsePayload?.aiResponse,
+          phase: aiResponsePayload?.phase,
+          learnerName: learnerName || null
+        });
+        return aiResponsePayload;
       } catch (introError) {
         console.error('[VoiceCoachOrbScreen] Failed to generate intro line:', introError);
         return null;
       }
     };
 
-    let advancedToPractice = false;
+    let resolvedIntro = null;
+
+    let shouldAdvancePhase = false;
 
     try {
-      let resolvedIntro =
-        introLine?.trim() || compiledIntroLine || (await fetchIntroLine()) || buildFallbackIntro();
+      introResponse = await fetchIntroResponse();
+      if (introResponse?.aiResponse) {
+        resolvedIntro = introResponse.aiResponse.trim();
+      }
+
+      if (!resolvedIntro) {
+        console.warn('[VoiceCoachOrbScreen] Intro response empty, using fallback.');
+        resolvedIntro = `Hi, I'm Cue — let's practice ${
+          scenario?.title || 'a real conversation'
+        } together. Ready?`;
+      }
 
       appendTranscript(resolvedIntro);
       messagesRef.current = [{ role: 'assistant', content: resolvedIntro, phase: 'intro' }];
       console.debug('[VoiceCoachOrbScreen] Intro line ready:', resolvedIntro);
       await speakText(resolvedIntro);
 
-      let scenarioLine = '';
-      if (scriptBundle?.scenarioIntro) {
-        scenarioLine = scriptBundle.scenarioIntro.trim();
-      } else if (typeof scenario === 'string') {
-        scenarioLine = scenario.trim();
-      } else {
-        scenarioLine =
-          scenario?.contextLine ||
-          scenario?.prompt ||
-          scenario?.description ||
-          scenario?.warmupQuestion ||
-          '';
-        scenarioLine = scenarioLine?.trim() || '';
-      }
+      const nextPhase = introResponse?.phase || (learnerName?.trim() ? 'practice' : 'intro');
+      shouldAdvancePhase = nextPhase !== 'intro';
 
-      if (scenarioLine) {
-        console.debug('[VoiceCoachOrbScreen] Scenario line ready:', scenarioLine);
-        await new Promise((resolve) => setTimeout(resolve, 1200));
-        appendTranscript(scenarioLine);
-        messagesRef.current = [
-          ...messagesRef.current,
-          { role: 'assistant', content: scenarioLine, phase: 'intro' }
-        ];
-        await speakText(scenarioLine);
-      } else {
-        console.debug('[VoiceCoachOrbScreen] No scenario line available to speak.');
+      if (!shouldAdvancePhase) {
+        console.debug('[VoiceCoachOrbScreen] Awaiting learner input before advancing phase.');
       }
-
-      advancedToPractice = true;
     } catch (introFlowError) {
       console.error('[VoiceCoachOrbScreen] Intro flow failed:', introFlowError);
       setError('We had trouble starting the session. Try again?');
@@ -333,104 +336,167 @@ const VoiceCoachOrbScreen = ({
     } finally {
       setSpeakingState(false);
       introRetryRef.current = false;
-      if (advancedToPractice) {
+
+      const targetPhase = introResponse?.phase || (learnerName?.trim() ? 'practice' : 'intro');
+      if (shouldAdvancePhase && targetPhase !== 'intro') {
         console.log('[PHASE] before change:', currentPhaseRef.current);
-        currentPhaseRef.current = 'practice';
-        setCurrentPhase('practice');
+        await persistPhase(targetPhase);
         console.log('[PHASE] after change:', currentPhaseRef.current);
       }
+
       if (!cancelledRef.current) {
-        console.debug('[VoiceCoachOrbScreen] Intro and scenario completed; scheduling listener start');
-        resumeListeningAfterDelay(1500);
+        const delay = targetPhase === 'intro' ? 800 : 1500;
+        console.debug('[VoiceCoachOrbScreen] Intro completed; scheduling listener start in', delay, 'ms');
+        resumeListeningAfterDelay(delay);
       }
     }
-  }, [appendTranscript, resolvedGradeLevel, introLine, introScripts, resumeListeningAfterDelay, scenario, speakText, stopListening]);
+  }, [learnerName, persistPhase, resolvedGradeLevel, resumeListeningAfterDelay, scenario, speakText, stopListening]);
 
   useEffect(() => {
-    console.debug('[VoiceCoachOrbScreen] Incoming props:', { introLine, scenario });
-
     if (!scenario) {
       setError(MISSING_SCENARIO_MESSAGE);
       return;
     }
 
+    if (!phaseRestored) {
+      return;
+    }
+
     setError((prev) => (prev === MISSING_SCENARIO_MESSAGE ? null : prev));
 
-    if (!introLine?.trim()) {
-      setError((prev) =>
-        prev && prev !== MISSING_SCENARIO_MESSAGE ? prev : MISSING_INTRO_MESSAGE
-      );
-    } else {
-      setError((prev) => (prev === MISSING_INTRO_MESSAGE ? null : prev));
-    }
-  }, [introLine, scenario]);
+    let mounted = true;
 
-  useEffect(() => {
-    if (!scenario) {
-      console.warn('[VoiceCoachOrbScreen] scenario prop is missing. Skipping voice flow.');
-      return;
-    }
+    const initialize = async () => {
+      if (!mounted) return;
+      const shouldStartWithIntro = messagesRef.current.length === 0;
 
-    if (hasInitializedRef.current) {
-      console.debug('[VoiceCoachOrbScreen] Intro already initialized; skipping re-run.');
-      return;
-    }
-    hasInitializedRef.current = true;
-    cancelledRef.current = false;
+      if (hasInitializedRef.current) {
+        if (shouldStartWithIntro || currentPhaseRef.current === 'intro') {
+          await speakIntroAndScenario();
+        } else {
+          shouldIgnoreInputRef.current = false;
+          setIsListening(true);
+          try {
+            if (recognitionRef.current) {
+              recognitionRef.current.start();
+              isListeningRef.current = true;
+            }
+          } catch (startError) {
+            console.warn('[VoiceCoachOrbScreen] Unable to restart recognition:', startError);
+          }
+        }
+        return;
+      }
 
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      setError('Speech recognition is not supported in this browser.');
-      return () => {
-        cancelledRef.current = true;
+      hasInitializedRef.current = true;
+
+      if (!('webkitSpeechRecognition' in window)) {
+        console.warn('[VoiceCoachOrbScreen] Speech recognition is not supported in this browser.');
+        if (shouldStartWithIntro || currentPhaseRef.current === 'intro') {
+          await speakIntroAndScenario();
+        }
+        return;
+      }
+
+      const recognition = new window.webkitSpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event) => {
+        const transcriptChunk = Array.from(event.results)
+          .map((result) => result[0]?.transcript || '')
+          .join(' ')
+          .trim();
+
+        if (transcriptChunk) {
+          console.debug('[VoiceCoachOrbScreen] Recognized speech chunk:', transcriptChunk);
+          handleUserMessage(transcriptChunk);
+        }
       };
-    }
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-
-    recognition.onresult = (event) => {
-      const last = event.results.length - 1;
-      const spoken = event.results[last][0].transcript;
-      if (spoken?.trim()) {
-        if (shouldIgnoreInputRef.current || isSpeakingRef.current) {
-          console.debug('[VoiceCoachOrbScreen] Ignoring captured audio while AI is speaking:', spoken);
+      recognition.onerror = (event) => {
+        if (event.error === 'no-speech') {
+          console.log('⚠️ [VoiceCoachOrbScreen] No speech detected, continuing to listen...');
+          setUserPrompt('Still listening... speak when you’re ready.');
           return;
         }
-        console.debug('[VoiceCoachOrbScreen] User message recognized:', spoken);
-        handleUserMessage(spoken);
-      }
-    };
+        if (event.error === 'not-allowed') {
+          console.error('[VoiceCoachOrbScreen] Microphone permission denied.');
+          setError('Microphone access is blocked. Please allow access in your browser settings.');
+          return;
+        }
+        console.error('Speech recognition error:', event.error);
+        setError('Listening error. We will keep trying...');
+      };
 
-    recognition.onerror = (event) => {
-      if (event.error === 'no-speech') return;
-      console.error('Speech recognition error:', event.error);
-      setError('Listening error. We will keep trying...');
-    };
+      recognition.onend = () => {
+        if (isListeningRef.current) {
+          try {
+            console.debug('[VoiceCoachOrbScreen] Recognition ended; restarting listener');
+            recognition.start();
+          } catch (restartError) {
+            console.warn('[VoiceCoachOrbScreen] Speech recognition restart failed:', restartError);
+          }
+        }
+      };
 
-    recognition.onend = () => {
-      if (cancelledRef.current) return;
-      if (isListeningRef.current) {
+      recognitionRef.current = recognition;
+
+      if (shouldStartWithIntro || currentPhaseRef.current === 'intro') {
+        await speakIntroAndScenario();
+      } else {
+        shouldIgnoreInputRef.current = false;
+        setIsListening(true);
         try {
-          console.debug('[VoiceCoachOrbScreen] Recognition ended; restarting listener');
           recognition.start();
-        } catch (restartError) {
-          console.warn('[VoiceCoachOrbScreen] Speech recognition restart failed:', restartError);
+          isListeningRef.current = true;
+        } catch (startError) {
+          console.warn('[VoiceCoachOrbScreen] Unable to start recognition:', startError);
         }
       }
     };
 
-    recognitionRef.current = recognition;
-
-    speakIntroAndScenario();
+    initialize();
 
     return () => {
+      mounted = false;
       cancelledRef.current = true;
       cleanup();
     };
-  }, [cleanup, handleUserMessage, scenario, speakIntroAndScenario]);
+  }, [cleanup, handleUserMessage, phaseRestored, resumeListeningAfterDelay, scenario, speakIntroAndScenario]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const savedPhase = await localforage.getItem('voiceCoach:lastPhase');
+        if (!cancelled && typeof savedPhase === 'string') {
+          console.debug('[VoiceCoachOrbScreen] Restoring persisted phase:', savedPhase);
+          currentPhaseRef.current = savedPhase;
+          setCurrentPhase(savedPhase);
+
+          if (savedPhase !== 'intro' && transcript.length === 0) {
+            const fallbackLine = scenario?.contextLine || scenario?.description || scenario?.prompt;
+            if (fallbackLine) {
+              appendTranscript(fallbackLine);
+            }
+          }
+        }
+      } catch (storageError) {
+        console.warn('[VoiceCoachOrbScreen] Unable to restore last phase:', storageError);
+      } finally {
+        if (!cancelled) {
+          setPhaseRestored(true);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [appendTranscript, scenario, transcript.length]);
 
 const statusText = useMemo(() => {
   if (isSpeaking) return '🔊 Speaking...';
@@ -449,7 +515,17 @@ const statusText = useMemo(() => {
           className={`orb ${isSpeaking ? 'orb--speaking' : isListening ? 'orb--listening' : 'orb--idle'}`}
         />
 
-        <p className="subtitle text-cyan-100 drop-shadow-sm">{statusText}</p>
+        <div className="space-y-3 max-w-2xl w-full">
+          <p className="text-lg font-medium text-cyan-100 drop-shadow-sm">{statusText}</p>
+          {userPrompt && !error && (
+            <p className="text-sm text-cyan-100/80">{userPrompt}</p>
+          )}
+          {error && (
+            <p className="text-sm text-red-200 bg-red-500/10 border border-red-500/30 rounded-full px-4 py-2 inline-block">
+              {error}
+            </p>
+          )}
+        </div>
 
         <div className="flex flex-col gap-2 max-w-xl mt-4 text-white/90 text-sm">
           {transcript.map((line, idx) => (
@@ -461,12 +537,6 @@ const statusText = useMemo(() => {
             </p>
           ))}
         </div>
-
-        {error && (
-          <p className="text-sm text-rose-200 bg-rose-500/10 border border-rose-500/30 rounded-full px-4 py-2">
-            {error}
-          </p>
-        )}
       </div>
     </div>
   );

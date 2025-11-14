@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { getVoiceIntro, getIntroductionSequence } from '../content/training/introduction-scripts';
+import { getIntroductionSequence } from '../content/training/introduction-scripts';
 
 const openai = new OpenAI({
   apiKey: import.meta.env.VITE_OPENAI_API_KEY,
@@ -56,6 +56,7 @@ class CleanVoiceService {
     const userTurns = conversationHistory.filter(
       (m) => m?.role === 'user' && ((m?.text ?? '').trim() || (m?.content ?? '').trim())
     ).length;
+    console.log('🧪 CleanVoiceService turnCount:', userTurns, conversationHistory);
 
     const normalizedPhase = (() => {
       if (typeof phase === 'string' && phase.trim()) {
@@ -81,8 +82,10 @@ class CleanVoiceService {
       scenarioKeyCandidates
         .map((candidate) => candidate && String(candidate).trim().toLowerCase())
         .find(Boolean) || '';
+    console.log('🧩 scenarioKey:', resolvedScenarioKey);
 
     const introSequenceConfig = getIntroductionSequence(gradeString, resolvedScenarioKey);
+
     const {
       greetingIntro,
       scenarioIntro,
@@ -90,24 +93,70 @@ class CleanVoiceService {
       firstPrompt,
       microCoachTips,
       scenarioScripts,
-      fallbackScenario
+      fallbackScenario,
+      scenarios
     } = introSequenceConfig || {};
 
     const baseIntroScriptParts = [greetingIntro, scenarioIntro, safetyAndConsent].filter(Boolean);
     const baseIntroScript = baseIntroScriptParts.join(' ');
 
-    const scenarioScript =
-      (resolvedScenarioKey &&
-        scenarioScripts &&
-        scenarioScripts[resolvedScenarioKey]) ||
-      fallbackScenario ||
-      {};
+    const normalizedScenarioKey = resolvedScenarioKey;
+
+    const gradeScenarioScripts = scenarios && typeof scenarios === 'object' ? scenarios : {};
+    const gradeScenarioEntry = normalizedScenarioKey
+      ? Object.entries(gradeScenarioScripts).reduce((acc, [key, value]) => {
+          if (acc) return acc;
+          if (!key || !value) return acc;
+          return key.toLowerCase() === normalizedScenarioKey ? value : acc;
+        }, null)
+      : null;
+
+    const scenarioScriptsMap = scenarioScripts || {};
+    const libraryScenarioEntry = normalizedScenarioKey
+      ? scenarioScriptsMap[normalizedScenarioKey] || null
+      : null;
+
+    const scenarioScript = gradeScenarioEntry || libraryScenarioEntry || fallbackScenario || {};
+
+    const scenarioIntroScript = scenarioScript?.intro || scenarioIntro || null;
+
+    const needsLearnerName = !learnerName || !String(learnerName).trim();
+
+    const microCoachTipsSafe = Array.isArray(microCoachTips) ? microCoachTips : [];
+    const tipsSource = Array.isArray(scenarioScript?.tips)
+      ? scenarioScript.tips
+      : microCoachTipsSafe;
+    const topicTips = tipsSource.filter(Boolean).slice(0, 2);
+    const tipsGuidance = topicTips.length
+      ? topicTips.map((tip, idx) => `${idx + 1}. ${tip}`).join(' ')
+      : '1. Smile, stay kind, and take the first small step. 2. Notice how others feel and keep your tone encouraging.';
+
+    const scenarioScene =
+      scenarioIntroScript ||
+      scenario?.contextLine ||
+      scenario?.description ||
+      scenario?.prompt ||
+      `Let’s practice ${scenario?.title || 'a real-life conversation'}.`;
+
+    const scenarioQuestion =
+      scenarioScript?.practicePrompt ||
+      scenario?.warmupQuestion ||
+      scenario?.prompt ||
+      'How would you respond?';
 
     console.log('[Cue Script Lookup]', {
-      gradeString,
-      resolvedScenarioKey,
-      scenarioScript
+      gradeLevel: gradeString,
+      scenarioKey: resolvedScenarioKey,
+      needsLearnerName,
+      scenarioScene,
+      topicTips
     });
+
+    const effectiveFirstPrompt = firstPrompt || introSequenceConfig?.firstPrompt || 'Ready to try it with me?';
+
+    console.log('🧠 scenarioIntroScript:', scenarioIntroScript);
+    console.log('🧠 baseIntroScript:', baseIntroScript);
+    console.log('🧠 firstPrompt:', effectiveFirstPrompt);
 
     const gradePrompts = {
       K: 'Use very short, kind sentences. Imagine you’re talking to a kindergartener.',
@@ -132,22 +181,16 @@ class CleanVoiceService {
       shy: 'You’re quiet but kind. Keep your responses short and gentle.',
       chatty: 'You love to talk. Respond with friendly enthusiasm.'
     };
-
     const personaInstruction = personaInstructions[persona] || '';
     const toneInstruction = toneHint ? `The learner sounds like this: ${toneHint}.` : '';
     const nameInstruction = learnerName
       ? `Their name is ${learnerName}. Use it naturally once in your reply.`
       : 'If they share their name, use it naturally once.';
 
-    const baseIdentity = `You are Cue, a friendly and warm AI coach who talks like a supportive older friend. Keep replies to one short sentence and an optional follow-up question. Pause between ideas. ${gradeInstruction} ${personaInstruction} ${toneInstruction} ${nameInstruction}`.trim();
+    const baseIdentity = `You are Cue, a friendly and warm AI coach who talks like a supportive older friend. Keep replies to at most three short sentences and finish with one guiding question when appropriate. Pause between ideas. ${gradeInstruction} ${personaInstruction} ${toneInstruction} ${nameInstruction}`.trim();
 
-    const scenarioContext = scenario.description
-      ? `The learner is practicing this situation: "${scenario.description}".`
-      : scenarioIntro
-      ? `The scenario focus: "${scenarioIntro}".`
-      : `We’re practicing ${scenario?.title || 'a real-life social scenario'}.`;
+    const scenarioContext = `We’re focusing on this scenario: "${scenarioScene}"`;
 
-    const microCoachTipsSafe = Array.isArray(microCoachTips) ? microCoachTips : [];
     const randomMicroTip =
       microCoachTipsSafe[Math.floor(Math.random() * microCoachTipsSafe.length)] ||
       'Take a breath, keep it friendly, and try one small step.';
@@ -163,22 +206,49 @@ class CleanVoiceService {
 
     let systemPrompt = baseIdentity;
 
-    if (normalizedPhase === 'intro') {
-      if (userTurns === 0) {
-        systemPrompt = `${baseIdentity}
-Here is the base intro script. Paraphrase it naturally in two short sentences max:
-"${baseIntroScript}"
-Finish with a question similar to "${firstPrompt || 'Ready to practice with me?'}"`;
-      } else {
-        const guidance = scenarioScript?.afterResponse
-          ? `Use this follow-up cue as guidance: "${scenarioScript.afterResponse}"`
-          : 'Offer encouragement, reassure them, and invite them to try the scenario with you.';
+    const learnerLine = latestLearnerMessage
+      ? `They just said: "${latestLearnerMessage}"`
+      : 'They are ready to begin.';
 
-        systemPrompt = `${baseIdentity}
-${scenarioContext}
-They just said: "${latestLearnerMessage}"
-${guidance}
-Keep it to one short sentence and a quick question.`;
+    if (normalizedPhase === 'intro') {
+      const coachTeacherLine = 'You are both a friendly coach and a supportive teacher.';
+
+      if (userTurns === 0) {
+        if (needsLearnerName) {
+          systemPrompt = `${baseIdentity}
+${coachTeacherLine}
+You do not know the learner's name yet.
+Greet them warmly and explain you’ll be their coach and teacher today.
+Ask what you should call them in one short friendly question.
+Do not share tips or the scenario yet.
+Keep it to two short sentences (under 35 words total).`;
+        } else {
+          systemPrompt = `${baseIdentity}
+${coachTeacherLine}
+You already know the learner's name is ${learnerName}. Use it once.
+Open with a warm greeting that blends coaching and teaching.
+Share two upbeat tips like: ${tipsGuidance}
+Then guide them into this scene: "${scenarioScene}"
+Finish with one guiding question similar to: "${scenarioQuestion}"
+Do not ask what they want to learn.
+Keep it to three short sentences (under 55 words total).`;
+        }
+      } else {
+        if (needsLearnerName) {
+          systemPrompt = `${baseIdentity}
+${coachTeacherLine}
+You still do not know their name. Encourage them again, in a new way, to share it.
+Keep it to one supportive sentence plus a short question.`;
+        } else {
+          systemPrompt = `${baseIdentity}
+${coachTeacherLine}
+${learnerLine}
+Acknowledge their name (${learnerName}) and show appreciation.
+Offer two quick tips such as: ${tipsGuidance}
+Guide them into this scene: "${scenarioScene}"
+End with the guiding question: "${scenarioQuestion}"
+Stay under three short sentences and keep the tone warm.`;
+        }
       }
     } else if (normalizedPhase === 'practice') {
       const guidance = scenarioScript?.afterResponse
@@ -236,6 +306,9 @@ Celebrate their effort and close the session with encouragement to keep practici
         }))
     ];
 
+    console.log('🧠 [generateResponse] Phase:', normalizedPhase);
+    console.log('🧠 [generateResponse] scenarioScript keys:', Object.keys(scenarioScript || {}));
+    console.log('🧠 [generateResponse] gradePrompt:', gradePrompts[gradeString]);
     console.log('[DEBUG] Sending to OpenAI:', messages);
 
     try {
@@ -252,17 +325,27 @@ Celebrate their effort and close the session with encouragement to keep practici
         aiResponse += ` ${randomMicroTip}`;
       }
 
-      const nextPhase =
-        normalizedPhase === 'intro' && userTurns >= 1
-          ? 'practice'
-          : normalizedPhase === 'practice' && userTurns >= 6
-          ? 'feedback'
-          : normalizedPhase === 'feedback' && userTurns >= 7
-          ? 'complete'
-          : normalizedPhase;
+      const nextPhase = (() => {
+        if (normalizedPhase === 'intro') {
+          return needsLearnerName ? 'intro' : 'practice';
+        }
+        if (normalizedPhase === 'practice' && userTurns >= 6) {
+          return 'feedback';
+        }
+        if (normalizedPhase === 'feedback' && userTurns >= 7) {
+          return 'complete';
+        }
+        if (normalizedPhase === 'practice') {
+          return 'practice';
+        }
+        return normalizedPhase;
+      })();
+
+      console.log('[✅ AI Intro Response]', { phase: normalizedPhase, aiResponse });
 
       return {
         aiResponse,
+        audioBlob: null,
         shouldContinue: nextPhase !== 'complete',
         phase: nextPhase
       };

@@ -68,23 +68,14 @@ const PracticeScreen = ({ darkMode }) => {
       return;
     }
 
-    const introScripts = getIntroductionSequence(String(userGradeNumber || 6), scenario.scriptKey || scenario.topicId);
-    const introLine = [introScripts?.greetingIntro, introScripts?.scenarioIntro, introScripts?.safetyAndConsent]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-
     const enrichedScenario = {
       ...scenario,
-      introScripts,
       behaviorConfig: AI_BEHAVIOR_CONFIG,
       conversationFlow: behaviorConversationFlow
     };
 
     setSelectedSession({
       scenario: enrichedScenario,
-      introLine,
-      introScripts,
       learnerName: learnerName || ""
     });
   };
@@ -94,8 +85,6 @@ const PracticeScreen = ({ darkMode }) => {
       <VoiceCoachOrbScreen
         scenario={selectedSession.scenario}
         gradeLevel={selectedSession.scenario.gradeLevel}
-        introLine={selectedSession.introLine}
-        introScripts={selectedSession.introScripts}
         learnerName={selectedSession.learnerName}
         behaviorConfig={AI_BEHAVIOR_CONFIG}
         onEndSession={() => setSelectedSession(null)}

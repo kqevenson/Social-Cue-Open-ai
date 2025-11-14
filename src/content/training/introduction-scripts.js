@@ -273,12 +273,6 @@ const INTRO_SEQUENCE_BY_GRADE = {
   }
 };
 
-const baseScenarioScript = (topicName = 'this skill') => ({
-  intro: `Let’s warm up a quick scenario about ${topicName}. I’ll set the scene, then you can jump in.`,
-  afterResponse:
-    `Great! Respond to what they said, keep it short, and encourage them to try the skill again in a new way.`
-});
-
 const SCENARIO_SCRIPT_LIBRARY = {};
 
 const registerScenarioScript = (keys, script) => {
@@ -356,7 +350,19 @@ registerScenarioScript(
   }
 );
 
+registerScenarioScript(
+  [
+    'entering-group-conversations'
+  ],
+  {
+    intro: "We’re practicing how to confidently join a group conversation that’s already in progress.",
+    afterResponse: "Encourage them to greet the group, mention one thing they noticed, and ask a friendly follow-up question."
+  }
+);
+
 export const getIntroductionSequence = (gradeInput = '6', scenarioKey = '') => {
+  console.log('🧩 [getIntroductionSequence] scenarioKey:', scenarioKey);
+  console.log('🎓 Grade Level:', gradeInput);
   const { gradeRange, numericGrade } = normalizeGradeInput(gradeInput);
   const gradeBandKey = (gradeRange || '').toLowerCase();
   const script =
@@ -379,16 +385,44 @@ export const getIntroductionSequence = (gradeInput = '6', scenarioKey = '') => {
           return acc;
         }, {})
       : {};
-  const scenarioEntry =
-    normalizedScenarioKey && scenarioMap[normalizedScenarioKey]
-      ? scenarioMap[normalizedScenarioKey]
-      : null;
 
-  const greetingIntro = `${script.greeting || ''} ${script.introduction || ''}`.replace(/\s+/g, ' ').trim();
-  const scenarioIntro = scenarioEntry?.intro
-    ? scenarioEntry.intro
+  const gradeScenarioEntry = normalizedScenarioKey && scenarioMap[normalizedScenarioKey]
+    ? scenarioMap[normalizedScenarioKey]
+    : null;
+  const libraryScenarioEntry = normalizedScenarioKey && SCENARIO_SCRIPT_LIBRARY[normalizedScenarioKey]
+    ? SCENARIO_SCRIPT_LIBRARY[normalizedScenarioKey]
+    : null;
+
+  console.debug('[IntroSequence] request', {
+    gradeInput,
+    gradeRange,
+    scenarioKey,
+    normalizedScenarioKey,
+    foundInGradeConfig: !!gradeScenarioEntry,
+    foundInLibrary: !!libraryScenarioEntry,
+    availableScenarioKeys: Object.keys(scenarioMap || {})
+  });
+
+  if (!gradeScenarioEntry && !libraryScenarioEntry && normalizedScenarioKey) {
+    console.warn('[IntroSequence] No scenario match for key:', normalizedScenarioKey);
+  }
+
+  const greeting = (script?.greeting || '').trim();
+  const introduction = (script?.introduction || '').trim();
+  const safety = (script?.safety || '').trim();
+  const consent = (script?.consent || '').trim();
+
+  const greetingIntro = `${greeting} ${introduction}`
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const scenarioIntro = gradeScenarioEntry?.intro?.trim()
+    ? gradeScenarioEntry.intro.trim()
     : 'Today we’re practicing a common social situation.';
-  const safetyAndConsent = `${script.safety || ''} ${script.consent || ''}`.replace(/\s+/g, ' ').trim();
+
+  const safetyAndConsent = `${safety} ${consent}`
+    .replace(/\s+/g, ' ')
+    .trim();
 
   const firstPromptByBand = {
     'k-2': "Want to try practicing with me?",
@@ -399,7 +433,7 @@ export const getIntroductionSequence = (gradeInput = '6', scenarioKey = '') => {
 
   const firstPrompt =
     firstPromptByBand[gradeBandKey] ||
-    "What sounds helpful to practice together right now?";
+    'What sounds helpful to practice together right now?';
 
   return {
     introScript,
@@ -407,6 +441,8 @@ export const getIntroductionSequence = (gradeInput = '6', scenarioKey = '') => {
     scenarioIntro,
     safetyAndConsent,
     firstPrompt,
+    gradeRange,
+    scenarios: script?.scenarios || {},
     scenarioScripts: SCENARIO_SCRIPT_LIBRARY,
     fallbackScenario: FALLBACK_SCENARIO_SCRIPT,
     microCoachTips: MICRO_COACH_TIPS,
