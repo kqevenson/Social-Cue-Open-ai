@@ -1,6 +1,5 @@
 // Social Cue Conversation Flow (STOP-TALK method)
 
-import { getVoiceIntro } from './introduction-scripts';
 import {
   topics as voicePracticeTopics,
   getScenariosForTopic,
@@ -159,10 +158,9 @@ const SCENARIO_FALLBACK = (scenario) =>
   scenario?.prompt || scenario?.description || `Let’s practice ${scenario?.title || 'a real-life conversation'}.`;
 
 /**
- * Builds a natural, voice-paced intro sequence that feels like a supportive peer coach.
- * Pauses are intentional between each segment to mimic human conversation and allow TTS to breathe.
- * Prompts include greeting, learner name exchange, scenario context, a micro tip, and a warm-up question.
- * Designed to create rapport, reduce cognitive load, and ease learners into the practice flow.
+ * DEPRECATED: buildIntroSegments - Intro flow is now handled entirely by Phase 3 engine
+ * This function is kept for backward compatibility but is no longer used
+ * The new intro flow is handled by generateConversationResponse() in generateConversationResponse.js
  */
 export function buildIntroSegments({
   scenario,
@@ -170,49 +168,8 @@ export function buildIntroSegments({
   learnerName,
   tips = DEFAULT_MICRO_TIPS
 } = {}) {
-  const sequence = getIntroductionSequence(gradeLevel || '6');
-  const sections = sequence.sections || {};
-  const scenarioKey = getScenarioIntroKey(scenario?.topicId || scenario?.id || '');
-  const scenarioScripts = sequence.scenarios || {};
-  const scenarioScript = scenarioKey ? scenarioScripts[scenarioKey] : null;
-
-  const greetingLine = sections.greeting || FALLBACK_GREETING;
-  const introLine = sections.introduction || '';
-  const safetyLine = sections.safety || FALLBACK_ENCOURAGE;
-  const consentLine = sections.consent || '';
-
-  const namePrompt = FALLBACK_ASK_NAME;
-
-  const acknowledgement = learnerName
-    ? `Awesome, ${learnerName}! I'm really glad you're here.`
-    : "Nice to meet you! I'm really glad you're here.";
-
-  const scenarioLine = scenarioScript?.intro || SCENARIO_FALLBACK(scenario);
-  const coachingTip = tips[Math.floor(Math.random() * tips.length)];
-  const warmUpQuestion =
-    scenarioScript?.practicePrompt || sequence.firstPrompt || 'Wanna try it out with me?';
-
-  return [
-    { id: 'greet', text: greetingLine, expectResponse: false },
-    introLine ? { id: 'intro-1', text: introLine, expectResponse: false } : null,
-    safetyLine ? { id: 'intro-2', text: safetyLine, expectResponse: false } : null,
-    consentLine ? { id: 'intro-3', text: consentLine, expectResponse: false } : null,
-    { id: 'ask-name', text: namePrompt, expectResponse: true },
-    { id: 'ack-name', text: acknowledgement, expectResponse: false },
-    {
-      id: 'scenario-setup',
-      text: `Today we’re practicing how to handle this: ${scenario?.title || 'a real-life chat'}. ${scenarioLine}`,
-      expectResponse: false
-    },
-    {
-      id: 'coaching-tip',
-      text: `Here’s a quick tip: ${coachingTip}`,
-      expectResponse: false
-    },
-    {
-      id: 'first-question',
-      text: warmUpQuestion,
-      expectResponse: true
-    }
-  ].filter(Boolean);
+  // Legacy function - intro flow is now handled by Phase 3 engine
+  // Return empty array as fallback
+  console.warn('buildIntroSegments is deprecated. Intro flow is now handled by Phase 3 engine.');
+  return [];
 }

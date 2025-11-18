@@ -6,8 +6,7 @@ import {
   getGradeBandFromGrade
 } from "../../data/voicePracticeScenarios";
 import { getScenarioForTopic } from "../../content/training/conversation-flow";
-import { getIntroductionSequence } from "../../content/training/introduction-scripts";
-import { AI_BEHAVIOR_CONFIG, conversationFlow as behaviorConversationFlow } from "../../content/training/aibehaviorconfig";
+import { AI_BEHAVIOR_CONFIG } from "../../content/training/aibehaviorconfig";
 
 const FALLBACK_ICON = "💬";
 
@@ -70,8 +69,10 @@ const PracticeScreen = ({ darkMode }) => {
 
     const enrichedScenario = {
       ...scenario,
-      behaviorConfig: AI_BEHAVIOR_CONFIG,
-      conversationFlow: behaviorConversationFlow
+      topicId: topic.id,            // REQUIRED
+      topic: topic.id,              // backup alias
+      difficulty: "easy",           // default for intro
+      behaviorConfig: AI_BEHAVIOR_CONFIG
     };
 
     setSelectedSession({
@@ -87,6 +88,7 @@ const PracticeScreen = ({ darkMode }) => {
         gradeLevel={selectedSession.scenario.gradeLevel}
         learnerName={selectedSession.learnerName}
         behaviorConfig={AI_BEHAVIOR_CONFIG}
+        autoStart={true}
         onEndSession={() => setSelectedSession(null)}
       />
     );

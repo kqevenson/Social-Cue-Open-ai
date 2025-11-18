@@ -4,7 +4,6 @@
  */
 
 import responseEvaluationService from './responseEvaluationService.js';
-import { getVoiceIntro } from '../content/training/introduction-scripts.js';
 import { leadershipMethod as leadershipMethodConfig } from '../content/training/aibehaviorconfig.js';
 
 const WORD_LIMITS = {
@@ -168,33 +167,23 @@ class StandaloneContentService {
   }
 
   /**
-   * Generate INTRO prompt - FIXED to not repeat!
+   * Generate INTRO prompt - DEPRECATED: Intro flow is now handled by Phase 3 engine
+   * This method is kept for backward compatibility but returns a simple fallback
    */
   generateIntroPrompt(gradeKey, scenario, role, wordLimit, conversationHistory = []) {
-    const topicDescriptor =
-      scenario?.topicId || scenario?.topic || scenario?.title || scenario?.category || '';
-    const introData = getVoiceIntro(gradeKey, topicDescriptor, scenario);
+    // Intro flow is now handled entirely by generateConversationResponse() in generateConversationResponse.js
+    // This method returns a fallback for any legacy code still calling it
     const userMessages = conversationHistory.filter((m) => m.role === 'user').length;
 
     if (userMessages === 0) {
-      const combinedIntro = `${introData.greetingIntro} ${introData.scenarioIntro} ${introData.safetyAndConsent}`
-        .replace(/\s+/g, ' ')
-        .trim();
-
       return `You are Cue, the Social Cue coach for ${gradeKey} students.
 
-INTRO EXCHANGE 1 of 2:
-
-Say: "${combinedIntro}"
+Say a warm greeting and ask if they're ready to practice.
 
 Keep it simple and warm. Stay under ${wordLimit} words.`;
     }
 
     return `You are Cue, the Social Cue coach for ${gradeKey} students.
-
-INTRO EXCHANGE 2 of 2:
-
-Say: "${introData.firstPrompt}"
 
 Encourage them to respond so you can move into roleplay as ${role}. Keep it warm and under ${wordLimit} words.`;
   }

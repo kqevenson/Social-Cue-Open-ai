@@ -31,11 +31,13 @@ const PracticeSession = ({
     ({ scenario, gradeLevel: scenarioGradeLevel, gradeBand }) => {
       if (!scenario) return;
 
+      // Prefer dynamic scenario properties, fallback to static contextLine
       const intro = scenario?.introLine ||
+        scenario?.spokenScene ||
+        scenario?.description ||
         scenario?.contextLine ||
         scenario?.warmupQuestion ||
         scenario?.prompt ||
-        scenario?.description ||
         `Let's practice ${scenario?.title || 'this social skill'} together.`;
 
       setActiveVoiceSession({

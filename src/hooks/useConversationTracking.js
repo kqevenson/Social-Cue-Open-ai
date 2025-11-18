@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import contentService from '../services/contentService';
-import { getVoiceIntro } from '../content/training/introduction-scripts';
 
 export const useConversationTracking = (gradeLevel, scenario) => {
   const [conversationHistory, setConversationHistory] = useState([]);
