@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import localforage from 'localforage';
 import useVoiceConversation from '../hooks/useVoiceConversation';
-import { playVoiceResponseWithOpenAI, stopOpenAITTSPlayback, unlockAudio } from '../services/openAITTSService';
+import { playVoiceResponseWithOpenAI, stopOpenAITTSPlayback } from '../services/openAITTSService';
 import StorageService from '../services/storageService';
 
 const MAX_STORED_LINES = 40;
@@ -21,9 +21,7 @@ const VoiceCoachOrbScreen = ({
   const [transcript, setTranscript] = useState([]);
   const [phaseRestored, setPhaseRestored] = useState(false);
   const [userPrompt, setUserPrompt] = useState('Ready when you are');
-  const [sessionPrimed, setSessionPrimed] = useState(false);
-  const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
-  const [showStartButton, setShowStartButton] = useState(true);
+  const [recognitionReady, setRecognitionReady] = useState(false);
 
   const resolvedGradeLevel = scenario?.gradeLevel || gradeLevel || '6';
 
@@ -31,7 +29,7 @@ const VoiceCoachOrbScreen = ({
   const isListeningRef = useRef(false);
   const cancelledRef = useRef(false);
   const hasInitializedRef = useRef(false);
-  const shouldIgnoreInputRef = useRef(true);
+  const shouldIgnoreInputRef = useRef(false);
   const listeningTimeoutRef = useRef(null);
 
   const storedUser = StorageService.getUserData();
@@ -40,7 +38,7 @@ const VoiceCoachOrbScreen = ({
   // Use the conversation hook - it handles ALL intro/scenario/teaching logic
   const conversation = useVoiceConversation({
     scenario,
-    autoStart: autoStart && sessionPrimed,
+    autoStart: true, // Always auto-start when mounted
     learnerName,
     onPhaseChange: (newPhase, oldPhase) => {
       console.log('[VoiceCoachOrbScreen] Phase changed:', { oldPhase, newPhase });
@@ -92,13 +90,13 @@ const VoiceCoachOrbScreen = ({
     if (!recognitionRef.current || isListeningRef.current) return;
 
     try {
-      console.debug('[VoiceCoachOrbScreen] Starting speech recognition listener');
+      console.debug('[VoiceCoach] startListening called');
       recognitionRef.current.start();
       isListeningRef.current = true;
       setIsListening(true);
       setError(null);
-    } catch (startError) {
-      console.error('[VoiceCoachOrbScreen] Error starting recognition:', startError);
+    } catch (err) {
+      console.warn('[VoiceCoach] startListening failed:', err);
     }
   }, []);
 
@@ -114,7 +112,7 @@ const VoiceCoachOrbScreen = ({
   }, []);
 
   const resumeListeningAfterDelay = useCallback((delay = 800) => {
-    shouldIgnoreInputRef.current = true;
+    shouldIgnoreInputRef.current = false;
     if (listeningTimeoutRef.current) {
       clearTimeout(listeningTimeoutRef.current);
     }
@@ -161,129 +159,79 @@ const VoiceCoachOrbScreen = ({
         setError('Sorry, something went wrong. Please try again.');
       } finally {
         if (!cancelledRef.current && !isSpeaking) {
-          resumeListeningAfterDelay(900);
+          resumeListeningAfterDelay(1500);
         }
       }
     },
     [appendTranscript, sendUserMessage, stopListening, resumeListeningAfterDelay, isSpeaking]
   );
 
-  // Initialize speech recognition and start conversation when ready
+  // Initialize speech recognition synchronously
   useEffect(() => {
     if (!scenario) {
       setError(MISSING_SCENARIO_MESSAGE);
       return;
     }
 
-    if (!phaseRestored || !sessionPrimed) {
+    if (!('webkitSpeechRecognition' in window)) {
+      console.warn('[VoiceCoachOrbScreen] Speech recognition is not supported.');
       return;
     }
 
-    setError((prev) => (prev === MISSING_SCENARIO_MESSAGE ? null : prev));
+    // Synchronous creation (Safari-friendly)
+    const recognition = new window.webkitSpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
 
-    let mounted = true;
+    recognition.onresult = (event) => {
+      const result = event.results[event.resultIndex];
 
-    const initialize = async () => {
-      if (!mounted) return;
-
-      if (hasInitializedRef.current) {
-        shouldIgnoreInputRef.current = false;
-        setIsListening(true);
-        try {
-          if (recognitionRef.current) {
-            recognitionRef.current.start();
-            isListeningRef.current = true;
-          }
-        } catch (startError) {
-          console.warn('[VoiceCoachOrbScreen] Unable to restart recognition:', startError);
+      if (result.isFinal) {
+        const text = result[0].transcript.trim();
+        if (text) {
+          console.debug('[VoiceCoach] Final speech:', text);
+          handleUserMessage(text);
         }
-        return;
       }
-
-      hasInitializedRef.current = true;
-
-      if (!('webkitSpeechRecognition' in window)) {
-        console.warn('[VoiceCoachOrbScreen] Speech recognition is not supported in this browser.');
-        // Start conversation even without speech recognition
-        if (autoStart && sessionPrimed) {
-          startConversation();
-        }
-        return;
-      }
-
-      const recognition = new window.webkitSpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = false;
-      recognition.lang = 'en-US';
-
-      recognition.onresult = (event) => {
-        const transcriptChunk = Array.from(event.results)
-          .map((result) => result[0]?.transcript || '')
-          .join(' ')
-          .trim();
-
-        if (transcriptChunk) {
-          console.debug('[VoiceCoachOrbScreen] Recognized speech chunk:', transcriptChunk);
-          handleUserMessage(transcriptChunk);
-        }
-      };
-
-      recognition.onerror = (event) => {
-        if (event.error === 'no-speech') {
-          console.log('⚠️ [VoiceCoachOrbScreen] No speech detected, continuing to listen...');
-          setUserPrompt("Still listening... speak when you're ready.");
-          return;
-        }
-        if (event.error === 'not-allowed') {
-          console.error('[VoiceCoachOrbScreen] Microphone permission denied.');
-          setError('Microphone access is blocked. Please allow access in your browser settings.');
-          return;
-        }
-        console.error('Speech recognition error:', event.error);
-        setError('Listening error. We will keep trying...');
-      };
-
-      recognition.onend = () => {
-        if (isListeningRef.current) {
-          try {
-            console.debug('[VoiceCoachOrbScreen] Recognition ended; restarting listener');
-            recognition.start();
-          } catch (restartError) {
-            console.warn('[VoiceCoachOrbScreen] Speech recognition restart failed:', restartError);
-          }
-        }
-      };
-
-      recognitionRef.current = recognition;
-
-      // Start conversation when ready
-      if (autoStart && sessionPrimed) {
-        startConversation();
-      }
-
-      // Start listening after a brief delay
-      setTimeout(() => {
-        if (!cancelledRef.current && !isSpeaking) {
-          shouldIgnoreInputRef.current = false;
-          setIsListening(true);
-          try {
-            recognition.start();
-            isListeningRef.current = true;
-          } catch (startError) {
-            console.warn('[VoiceCoachOrbScreen] Unable to start recognition:', startError);
-          }
-        }
-      }, 1000);
     };
 
-    initialize();
-
-    return () => {
-      mounted = false;
-      cancelledRef.current = true;
-      cleanup();
+    recognition.onerror = (event) => {
+      if (event.error === 'not-allowed') {
+        setError('Microphone access is blocked.');
+        return;
+      }
+      console.error('Speech error:', event.error);
     };
-  }, [cleanup, handleUserMessage, phaseRestored, scenario, sessionPrimed, autoStart, startConversation, isSpeaking]);
+
+    recognition.onend = () => {
+      console.debug('[VoiceCoach] onend fired');
+
+      if (!cancelledRef.current && isListeningRef.current && !isSpeaking) {
+        setTimeout(() => {
+          try {
+            console.debug('[VoiceCoach] Restarting speech recognition...');
+            recognition.start();
+          } catch (e) {
+            console.warn('[VoiceCoach] Could not restart recognition:', e);
+          }
+        }, 250); // delay fixes Safari abort bug
+      }
+    };
+
+    recognitionRef.current = recognition;
+    setRecognitionReady(true);
+
+    // Auto-start mic when component mounts (audio already unlocked by PracticeStartScreen)
+    try {
+      shouldIgnoreInputRef.current = false;
+      recognition.start();
+      isListeningRef.current = true;
+      setIsListening(true);
+    } catch (err) {
+      console.warn('[VoiceCoachOrbScreen] Failed to start mic on mount:', err);
+    }
+  }, [scenario, handleUserMessage]);
 
   // Restore persisted phase
   useEffect(() => {
@@ -309,46 +257,43 @@ const VoiceCoachOrbScreen = ({
     };
   }, []);
 
+  const handleStartPractice = useCallback(async () => {
+    try {
+      // ⚠️ CRITICAL: unlockAudio() creates AudioContext - must be called on user gesture
+      await unlockAudio();
+      console.log('✅ Audio unlocked, starting practice session');
+      
+      setIsAudioUnlocked(true);
+      setSessionPrimed(true);
+      
+      // Start mic after audio is unlocked
+      try {
+        shouldIgnoreInputRef.current = false;
+        if (recognitionRef.current) {
+          recognitionRef.current.start();
+          isListeningRef.current = true;
+          setIsListening(true);
+        }
+      } catch (err) {
+        console.warn("Failed to start mic after unlock:", err);
+      }
+      
+      // Start conversation
+      startConversation();
+    } catch (error) {
+      console.error('Failed to unlock audio:', error);
+      setError('Failed to start practice. Please try again.');
+    }
+  }, [startConversation]);
+
   const statusText = useMemo(() => {
-    if (!sessionPrimed) return 'Tap start to unlock audio and begin.';
+    if (!sessionPrimed) return 'Tap "Start Practice" to begin.';
     if (isSpeaking) return '🔊 Speaking...';
     if (isListening) return '💡 Listening... speak naturally!';
     if (isLoading) return '🤖 Thinking...';
     return 'Ready when you are';
   }, [isListening, isLoading, isSpeaking, sessionPrimed]);
 
-  const handleStartPractice = useCallback(async () => {
-    if (isAudioUnlocked) {
-      setShowStartButton(false);
-      setSessionPrimed(true);
-      setError(null);
-      // Start conversation immediately when primed
-      if (autoStart) {
-        startConversation();
-      }
-      return;
-    }
-
-    try {
-      await unlockAudio();
-      setIsAudioUnlocked(true);
-      setShowStartButton(false);
-      setSessionPrimed(true);
-      setError(null);
-      // Start conversation immediately when primed
-      if (autoStart) {
-        startConversation();
-      }
-    } catch (unlockError) {
-      console.error('Failed to unlock audio context:', unlockError);
-      const message = unlockError?.message || unlockError?.toString() || '';
-      if (message.includes('NotSupportedError')) {
-        setError('Audio playback is blocked. Try tapping again or switch browsers.');
-      } else {
-        setError('Tap the start button so we can enable audio.');
-      }
-    }
-  }, [isAudioUnlocked, autoStart, startConversation]);
 
   // Handle phase completion
   useEffect(() => {
@@ -359,17 +304,6 @@ const VoiceCoachOrbScreen = ({
 
   return (
     <div className="relative min-h-screen w-full bg-[#020412] text-white flex items-center justify-center overflow-hidden">
-      {showStartButton && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-50">
-          <button
-            type="button"
-            onClick={handleStartPractice}
-            className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-4 rounded-2xl text-xl font-bold shadow-2xl hover:scale-[1.02] transition-transform"
-          >
-            🎤 Start Practice
-          </button>
-        </div>
-      )}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(56,189,248,0.22),_transparent_55%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(15,118,246,0.12),_transparent_60%)]" />
 
@@ -380,7 +314,15 @@ const VoiceCoachOrbScreen = ({
 
         <div className="space-y-3 max-w-2xl w-full">
           <p className="text-lg font-medium text-cyan-100 drop-shadow-sm">{statusText}</p>
-          {userPrompt && !error && (
+          {!sessionPrimed && !error && (
+            <button
+              onClick={handleStartPractice}
+              className="mt-4 px-8 py-4 bg-gradient-to-r from-blue-500 to-emerald-400 text-white font-semibold rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+            >
+              🎤 Start Practice
+            </button>
+          )}
+          {userPrompt && !error && sessionPrimed && (
             <p className="text-sm text-cyan-100/80">{userPrompt}</p>
           )}
           {error && (

@@ -20,15 +20,20 @@ let activeAudioUrl = null;
 let openAIClient = null;
 let audioUnlocked = false;
 let pendingUnlockPromise = null;
-let sharedAudioContext = null;
+let audioCtx = null;
 
-function ensureAudioContext() {
-  if (sharedAudioContext) return sharedAudioContext;
-  const AudioCtx =
-    (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)) || null;
-  if (!AudioCtx) return null;
-  sharedAudioContext = new AudioCtx();
-  return sharedAudioContext;
+export async function getAudioContext() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === "suspended") {
+    try {
+      await audioCtx.resume();
+    } catch (e) {
+      console.warn("Could not resume AudioContext:", e);
+    }
+  }
+  return audioCtx;
 }
 
 function getOpenAIClient() {
@@ -63,56 +68,63 @@ function stopOpenAITTSPlayback() {
 }
 
 export async function unlockAudio() {
-  if (audioUnlocked) return;
-  if (pendingUnlockPromise) {
-    await pendingUnlockPromise;
-    return;
+  if (audioUnlocked && audioCtx) {
+    return audioCtx;
   }
 
-  const audioContext = ensureAudioContext();
+  if (pendingUnlockPromise) {
+    return pendingUnlockPromise;
+  }
 
-  if (audioContext) {
+  pendingUnlockPromise = (async () => {
     try {
-      if (audioContext.state === 'suspended') {
-        pendingUnlockPromise = audioContext.resume();
-        await pendingUnlockPromise;
-      }
+      const ctx = await getAudioContext();
+      await ctx.resume();
       audioUnlocked = true;
-      console.log('✅ Audio context unlocked via AudioContext.resume()');
-      pendingUnlockPromise = null;
-      return;
+      return ctx;
     } catch (error) {
-      console.warn('⚠️ AudioContext resume failed, falling back to silent audio unlock.', error);
+      console.warn('⚠️ AudioContext resume failed, attempting silent unlock fallback.', error);
+
+      if (typeof Audio === 'undefined') {
+        audioUnlocked = true;
+        return audioCtx;
+      }
+
+      await new Promise((resolve, reject) => {
+        const silentAudio = new Audio();
+        silentAudio.preload = 'auto';
+        silentAudio.muted = true;
+        silentAudio.loop = false;
+        silentAudio.src = SILENT_MP3_DATA_URL;
+
+        const cleanup = () => {
+          silentAudio.pause();
+          silentAudio.src = '';
+        };
+
+        silentAudio
+          .play()
+          .then(resolve)
+          .catch((silentError) => {
+            console.warn('⚠️ Audio unlock failed (user gesture required):', silentError);
+            reject(silentError);
+          })
+          .finally(cleanup);
+      });
+
+      try {
+        const ctx = await getAudioContext();
+        await ctx.resume();
+        audioUnlocked = true;
+        return ctx;
+      } catch (resumeError) {
+        console.warn('⚠️ AudioContext still suspended after silent unlock attempt.', resumeError);
+        return audioCtx;
+      }
+    } finally {
       pendingUnlockPromise = null;
     }
-  }
-
-  if (typeof Audio === 'undefined') {
-    audioUnlocked = true;
-    return;
-  }
-
-  const silentAudio = new Audio();
-  silentAudio.preload = 'auto';
-  silentAudio.muted = true;
-  silentAudio.loop = false;
-  silentAudio.src = SILENT_MP3_DATA_URL;
-
-  pendingUnlockPromise = silentAudio
-    .play()
-    .then(() => {
-      audioUnlocked = true;
-      console.log('✅ Audio element unlocked via silent playback');
-    })
-    .catch((error) => {
-      console.warn('⚠️ Audio unlock failed (user gesture required):', error);
-      throw error;
-    })
-    .finally(() => {
-      pendingUnlockPromise = null;
-      silentAudio.pause();
-      silentAudio.src = '';
-    });
+  })();
 
   return pendingUnlockPromise;
 }
@@ -134,14 +146,15 @@ export async function playVoiceResponseWithOpenAI(text, options = {}) {
   const voice = options.voice || DEFAULT_VOICE;
   const model = options.model || DEFAULT_MODEL;
 
-  const ctxForPlayback = ensureAudioContext();
-  if (ctxForPlayback && ctxForPlayback.state === 'suspended') {
-    try {
-      await ctxForPlayback.resume();
-      console.log('🔈 AudioContext resumed before playback.');
-    } catch (resumeError) {
-      console.warn('⚠️ Unable to resume AudioContext prior to playback:', resumeError);
-    }
+  let ctxForPlayback = null;
+  try {
+    ctxForPlayback = await getAudioContext();
+  } catch (contextError) {
+    console.warn('⚠️ AudioContext not available for playback:', contextError);
+  }
+
+  if (!ctxForPlayback) {
+    console.warn('⚠️ AudioContext not initialized - unlockAudio() must be called first');
   }
 
   let speech;
@@ -236,4 +249,4 @@ export async function playVoiceResponseWithOpenAI(text, options = {}) {
   });
 }
 
-export { stopOpenAITTSPlayback, ensureAudioContext };
+export { stopOpenAITTSPlayback };

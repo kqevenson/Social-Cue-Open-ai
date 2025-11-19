@@ -159,7 +159,15 @@ export default function AIPracticeSession({
   const handleStartPractice = () => {
     if (!generatedScenario || typeof onStartScenario !== 'function') return;
     onStartScenario({
-      scenario: generatedScenario,
+      scenario: {
+        ...generatedScenario,
+        introLine:
+          generatedScenario.introLine ??
+          generatedScenario.prompt ??
+          generatedScenario.warmupQuestion ??
+          generatedScenario.title ??
+          'Let’s get started!'
+      },
       gradeLevel: String(numericGrade),
       gradeBand
     });

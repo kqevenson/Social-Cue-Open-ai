@@ -3,7 +3,6 @@ import { Home, Target, TrendingUp, Settings, BookOpen, User, BarChart3, Star } f
 import { getUserData, saveUserData } from './socialcue/utils/storage';
 import { ToastProvider, ErrorBoundary } from './socialcue/animations';
 import HomeScreen from './socialcue/HomeScreen';
-import PracticeSession from './socialcue/PracticeSession';
 import PracticeScreen from './socialcue/PracticeScreen';
 
 import ProgressScreen from './socialcue/ProgressScreen';
@@ -245,31 +244,6 @@ function SocialCueApp({ onLogout }) {
           </ErrorBoundary>
         )}
         
-        {/* Practice Session - only for learners */}
-        {currentScreen === 'practice' && sessionId && userData?.role !== 'parent' && (
-          <ErrorBoundary darkMode={darkMode} onNavigate={handleNavigate}>
-            <PracticeSession 
-              sessionId={sessionId} 
-              onNavigate={handleNavigate}
-              onComplete={(data) => {
-                console.log('Session completed!', data);
-                handleNavigate('progress');
-                setSessionId(null);
-              }}
-              onExit={() => {
-                console.log('Session exited');
-                handleNavigate('home');
-                setSessionId(null);
-              }}
-              darkMode={darkMode} 
-              gradeLevel={userData.grade || "5"} 
-              soundEffects={soundEffects}
-              autoReadText={autoReadText}
-              topicName={userData.topicName}
-            />
-          </ErrorBoundary>
-        )}
-        
         {/* Practice Home - only for learners */}
         {currentScreen === 'practiceHome' && userData?.role !== 'parent' && (
           <PracticeScreen 
@@ -283,7 +257,7 @@ function SocialCueApp({ onLogout }) {
             gradeLevel={userData.gradeLevel || "6-8"} 
             onBack={() => handleNavigate('home')}
             onStartScenario={() => {
-              handleNavigate('practice');
+              handleNavigate('practiceHome');
               setSessionId(null);
             }}
           />

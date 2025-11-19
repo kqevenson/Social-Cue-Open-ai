@@ -161,7 +161,7 @@ function HomeScreen({ userData, onNavigate, darkMode, soundEffects }) {
               <h1 className="text-3xl font-bold mb-3 text-white">Master Small Talk</h1>
               <p className="text-base mb-4 opacity-90 max-w-2xl text-white">Learn conversation starters that work in any situation</p>
               <div className="flex items-center gap-4">
-                <button onClick={() => onNavigate('practice', 1)} className="bg-white text-black font-bold px-6 py-3 rounded-full flex items-center gap-2 hover:bg-gray-100 transition-colors">
+                <button onClick={() => onNavigate('practiceHome')} className="bg-white text-black font-bold px-6 py-3 rounded-full flex items-center gap-2 hover:bg-gray-100 transition-colors">
                   <Play className="w-5 h-5" fill="black" />
                   Start Session
                 </button>
@@ -279,7 +279,7 @@ function HomeScreen({ userData, onNavigate, darkMode, soundEffects }) {
                     <DifficultyBadge level={session.difficultyLevel || 1} darkMode={darkMode} size="xs" />
                   </div>
                   <div className="flex-1"></div>
-                  <button onClick={() => onNavigate('practice', session.id)} className="w-full bg-blue-500 text-white font-bold py-2.5 rounded-full flex items-center justify-center gap-2 hover:bg-blue-600 transition-all text-sm mb-4">
+                  <button onClick={() => onNavigate('practiceHome')} className="w-full bg-blue-500 text-white font-bold py-2.5 rounded-full flex items-center justify-center gap-2 hover:bg-blue-600 transition-all text-sm mb-4">
                     <Play className="w-4 h-4" fill="white" />
                     {session.progress > 0 ? 'Continue' : 'Begin'}
                   </button>

@@ -290,21 +290,8 @@ function LessonsScreen({ userData, onNavigate, darkMode }) {
     
     console.log('Starting lesson with topic:', lesson.topic);
     
-    // Map lesson ID to session ID for PracticeSession and pass topicName
-    const sessionIdMap = {
-      'small-talk': 1,
-      'active-listening': 2,
-      'body-language': 3,
-      'confidence-building': 4,
-      'conflict-resolution': 5
-    };
-    
-    // Update user data with the correct topicName before navigating
-    const userData = getUserData();
-    const updatedUserData = { ...userData, topicName: lesson.topic };
-    saveUserData(updatedUserData);
-    
-    onNavigate('practice', sessionIdMap[lessonId] || 1);
+    // Navigate to practice home screen
+    onNavigate('practiceHome');
   };
 
   const handleRestartLesson = (lesson) => {
@@ -467,7 +454,7 @@ function LessonsScreen({ userData, onNavigate, darkMode }) {
           const backupProgress = JSON.parse(localStorage.getItem('lessonProgressBackup') || '[]');
           if (backupProgress.length > 0) {
             console.log('🔄 Found backup progress, attempting to sync...');
-            // The sync will happen in PracticeSession when user starts a lesson
+            // Navigate to practice home screen
           }
         } catch (error) {
           console.error('❌ Error checking backup progress:', error);

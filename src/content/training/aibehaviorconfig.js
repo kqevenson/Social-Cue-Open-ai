@@ -11,8 +11,6 @@
 // -------------------------------------------------------------
 
 import { personaEngine } from "../../services/personaEngine.js";
-import { generateDynamicScenario } from "../../services/generateDynamicScenario.js";
-import { topics as voicePracticeTopics } from "../../data/voicePracticeScenarios.js";
 
 
 // -------------------------------------------------------------
@@ -69,33 +67,15 @@ export const FEEDBACK_SNIPS = {
 // -------------------------------------------------------------
 // 4. INTRODUCTION FLOW — 3 turns, natural & friendly
 // -------------------------------------------------------------
-export function buildIntroFlow(gradeLevel, topicId, previousScenario = null) {
-  const persona = personaEngine.getPersona(gradeLevel);
-
-  // Step 1: greeting (always includes "I'm Cue")
-  const turn1 = persona.greet();
-
-  // Step 2: check-in
-  const turn2 = persona.checkIn();
-
-  // Step 3: dynamic scenario generation
-  const dynamic = generateDynamicScenario({
-    topicId,
-    gradeLevel,
-    learnerName: "",
-    previousScenario,
-    difficulty: "easy"
-  });
-
-  const dynamicScenario = { description: dynamic.spokenScene };
-
-  const turn3 = persona.scenarioLeadIn(dynamicScenario);
+export function buildIntroFlow({ gradeLevel, topicName, learnerName, lastScenario }) {
+  const namePrefix = learnerName ? `${learnerName}, ` : "";
 
   return {
-    turn1,
-    turn2,
-    turn3,
-    dynamicScenario: dynamic
+    turn1: `Hey ${namePrefix}I'm Cue! Today we're practicing ${topicName}.`,
+
+    turn2: `Before we get started — have you tried this before?`,
+
+    turn3: `Awesome. Let's jump in and practice ${topicName} together!`
   };
 }
 
