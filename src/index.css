@@ -170,3 +170,110 @@ body {
     box-shadow: 0 0 35px rgba(96, 165, 250, 0.65), 0 0 70px rgba(56, 189, 248, 0.45);
   }
 }
+
+/* Orb container prevents clipping */
+.orb-container {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  margin: 0 auto;
+}
+
+/* The inner orb */
+.orb {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: #0f172a;
+  z-index: 2;
+  border: 3px solid rgba(255,255,255,0.12);
+}
+
+/* Glow layer */
+.orb-glow {
+  position: absolute;
+  inset: 0;
+  width: 260px;
+  height: 260px;
+  margin: auto;
+  border-radius: 50%;
+  filter: blur(100px);
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+/* Listening (cyan glow) */
+.glow--listening {
+  background: rgba(59, 233, 255, 0.14);
+  opacity: 1;
+}
+
+/* Speaking (violet glow) */
+.glow--speaking {
+  background: rgba(167, 139, 250, 0.18);
+  opacity: 1;
+}
+
+/* Idle → no glow */
+.orb--idle + .orb-glow {
+  opacity: 0;
+}
+
+/* Transcript text */
+.transcript-line {
+  font-size: 1.1rem;
+  color: white;
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+.message-stack {
+  width: 100%;
+  max-width: 50rem;
+  padding: 0 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* Base message styling */
+.msg {
+  font-size: 1.3rem;
+  line-height: 1.5;
+  opacity: 1;
+  transition: all 250ms ease;
+}
+
+/* AI message always appears on top */
+.msg-ai {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* User message appears under AI */
+.msg-user {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Waterfall temporary state (AI appears under user) */
+.msg-ai.temp-under {
+  transform: translateY(20px);
+  opacity: 0;
+}
+
+/* Slide-up animation for new AI messages */
+.msg-ai.slide-up {
+  transform: translateY(-10px);
+  opacity: 1;
+}
+
+/* Slide-down + fade for clearing user message */
+.msg-user.slide-down {
+  transform: translateY(20px);
+  opacity: 0;
+}

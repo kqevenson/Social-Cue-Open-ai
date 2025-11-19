@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { OpenAI } from 'openai';
 import { unlockAudio } from '../../services/openAITTSService';
+import { initRecognition, startRecognition, stopRecognition } from '../../services/speechRecognitionService';
 import { Sparkles, Clock, Lightbulb, Target, ArrowRight } from 'lucide-react';
 
 // ---------- AI SCENARIO GENERATOR ----------
@@ -82,12 +83,25 @@ Make it engaging, age-appropriate, and focused on real-world social skills pract
   }
 }
 
+// ---------- MICROPHONE ACCESS ----------
+
+async function ensureMicrophoneAccess() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    return stream;
+  } catch (err) {
+    console.error("Microphone permission denied:", err);
+    throw new Error("Microphone permission required to begin the session.");
+  }
+}
+
 // ---------- COMPONENT ----------
 
 const PracticeStartScreen = ({ topicName, gradeLevel, learnerName, onStartSession, darkMode = true }) => {
   const [scenario, setScenario] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isStarting, setIsStarting] = useState(false);
   const [openaiClient, setOpenaiClient] = useState(null);
 
   // Initialize OpenAI client
@@ -145,11 +159,33 @@ const PracticeStartScreen = ({ topicName, gradeLevel, learnerName, onStartSessio
   const handleBeginSession = async () => {
     if (!scenario) return;
 
+    // 1. MIC ACCESS
     try {
-      // Unlock audio before starting
-      await unlockAudio();
-      
-      // Construct scenario object
+      await ensureMicrophoneAccess();
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+
+    // 2. AUDIO UNLOCK
+    const ctx = await unlockAudio();
+    try {
+      await ctx.resume();
+    } catch (err) {
+      console.warn("Audio resume error:", err);
+    }
+
+    // 3. INIT + START SPEECH RECOGNITION
+    initRecognition();
+    stopRecognition();
+    setTimeout(() => {
+      startRecognition();
+    }, 200);
+
+    // 4. NAVIGATE TO ORB SCREEN
+    setIsStarting(true);
+
+    setTimeout(() => {
       const scenarioObject = {
         title: scenario.scenarioTitle,
         topicName,
@@ -161,12 +197,8 @@ const PracticeStartScreen = ({ topicName, gradeLevel, learnerName, onStartSessio
         estimatedTime: scenario.estimatedTime
       };
 
-      // Pass to parent
       onStartSession(scenarioObject);
-    } catch (err) {
-      console.error('Failed to unlock audio or start session:', err);
-      setError('Failed to start session. Please try again.');
-    }
+    }, 50);
   };
 
   if (isLoading) {

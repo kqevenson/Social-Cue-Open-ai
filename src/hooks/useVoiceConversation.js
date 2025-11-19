@@ -12,11 +12,9 @@ import {
   evaluateTurn,
   initializeLearnerMastery
 } from "../services/masteryEngine";
-import { generateAdaptiveScenario } from "../services/scenarioGenerator";
 
 // Voice Output
 import {
-  unlockAudio,
   playVoiceResponseWithOpenAI,
   stopOpenAITTSPlayback
 } from "../services/openAITTSService";
@@ -27,6 +25,158 @@ import { OpenAI } from 'openai';
 // Learner profile
 import useLearnerProfile from "./useLearnerProfile";
 import StorageService from "../services/storageService";
+
+// ---------- GRADE BANDS ----------
+
+export const gradeBands = {
+  "k-2": {
+    tone: "Use very simple, playful, gentle language. Short sentences. Warm and friendly. Never formal. Always supportive.",
+    coachStyle: "tiny friend coach",
+    followUp: "Wanna try?",
+    skillNaming: (skill) => `Here's a little trick: ${skill}.`,
+    microSkills: [
+      "saying hi with a smile",
+      "using a brave voice",
+      "looking at the person",
+      "saying one short sentence",
+      "asking a tiny question"
+    ],
+    feedback: {
+      good: ["Nice job!", "That sounded brave!", "Great work!"],
+      adjust: ["Try it slower.", "Try it with a softer voice.", "Try it with a little smile."]
+    }
+  },
+
+  "3-5": {
+    tone: "Use upbeat, friendly, energetic language. Clear and concrete. Sound like a fun, encouraging little coach. Never babyish.",
+    coachStyle: "friendly coach",
+    followUp: "Wanna try your version?",
+    skillNaming: (skill) => `Here's the next skill: ${skill}.`,
+    microSkills: [
+      "using a friendly opener",
+      "asking a simple question",
+      "adding one helpful detail",
+      "showing interest with a comment",
+      "using a calm, clear voice"
+    ],
+    feedback: {
+      good: ["Nice try!", "Great effort!", "That sounded friendly!", "You're getting it!"],
+      adjust: ["Try it slower and friendlier.", "Try adding a tiny greeting first.", "Try keeping it short and confident."]
+    }
+  },
+
+  "6-8": {
+    tone: "Use casual, relatable middle-school language. Slightly older sibling vibe. Supportive, not cheesy.",
+    coachStyle: "big-sibling helper",
+    followUp: "How would you say it?",
+    skillNaming: (skill) => `Here's something that really works: ${skill}.`,
+    microSkills: [
+      "matching their energy",
+      "keeping it natural and short",
+      "adding a tiny opener",
+      "showing interest with a quick question",
+      "reading the vibe"
+    ],
+    feedback: {
+      good: ["Nice! That was solid.", "Good move.", "That sounded natural."],
+      adjust: ["Try sounding a bit more relaxed.", "Try keeping it shorter.", "Try matching their energy a bit better."]
+    }
+  },
+
+  "9-12": {
+    tone: "Use real-world, mature teen language. Supportive mentor tone. No forced hype.",
+    coachStyle: "real-world mentor",
+    followUp: "What would you say next?",
+    skillNaming: (skill) => `Here's a move people your age actually use: ${skill}.`,
+    microSkills: [
+      "keeping it natural and confident",
+      "starting with something low-pressure",
+      "adding a quick relevant detail",
+      "asking an easy follow-up",
+      "not overthinking tone"
+    ],
+    feedback: {
+      good: ["Nice — that felt real.", "Good call.", "Solid delivery."],
+      adjust: ["Try making it sound more natural.", "Try trimming it down.", "Try keeping your tone easy-going."]
+    }
+  }
+};
+
+// ------------------------------------------------------------
+// SECTION 2 — UTILITIES (Timing, Selection, Cleaning, Decisions)
+// ------------------------------------------------------------
+
+// Natural delay used for realistic timing between turns
+export const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Utility to pick a random item from an array
+export const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+// Clean up AI text to enforce W2 "full sentence only" mode
+export function cleanText(text) {
+  if (!text) return "";
+  let t = text.toString().trim();
+
+  // Remove streaming artifacts
+  t = t.replace(/\.\.+/g, ".").replace(/--+/g, "").replace(/\s+/g, " ");
+
+  // Ensure final punctuation
+  if (!/[.!?]$/.test(t)) t = t + ".";
+
+  return t;
+}
+
+// Builds a grade-appropriate follow-up question (Cue always ends with a question)
+export function buildFollowUpQuestion(gradeBand) {
+  const band = gradeBands[gradeBand] || gradeBands["3-5"];
+  return band.followUp || "What do you think?";
+}
+
+// Pick a micro-skill the AI will explicitly name during the teaching phase
+export function pickMicroSkill(gradeBand) {
+  const band = gradeBands[gradeBand] || gradeBands["3-5"];
+  return pickRandom(band.microSkills);
+}
+
+// Decide whether to STAY in the teaching phase or MOVE into scenario practice
+// Option C (adaptive): depends on learner performance, tone, clarity
+export function determineSkillTransition(learnerMessage, gradeBand) {
+  const lower = learnerMessage.toLowerCase();
+
+  // If learner shows confidence → move forward
+  const strongSignals = [
+    "i would say",
+    "i'd say",
+    "i think",
+    "i can try",
+    "maybe i'd go with",
+    "i'd open with"
+  ];
+
+  if (strongSignals.some((s) => lower.includes(s))) {
+    return "advance";
+  }
+
+  // If message is very short, uncertain, confused → stay in teaching
+  if (learnerMessage.length < 4) return "stay";
+  if (lower.includes("idk") || lower.includes("don't know")) return "stay";
+  if (lower.includes("not sure") || lower.includes("maybe")) return "stay";
+
+  // Grade 3-5: use friendliness cues
+  if (gradeBand === "3-5") {
+    if (lower.includes("hi") || lower.includes("hello")) return "advance";
+  }
+
+  // Default: move forward
+  return "advance";
+}
+
+// Provide positive OR corrective feedback during teaching
+export function pickFeedback(gradeBand, type = "good") {
+  const band = gradeBands[gradeBand] || gradeBands["3-5"];
+  const pool = band.feedback?.[type] || ["Nice!", "Good job!"];
+  return pickRandom(pool);
+}
 
 // ---------- UTIL ----------
 
@@ -42,14 +192,9 @@ const createMessage = (role, text, phase) => ({
 
 async function generateAIIntro({ openaiClient, gradeLevel, topicName, learnerName }) {
   // Grade-specific tone guidance
-  const gradeBands = {
-    "k-2": "Use super simple, playful language. Sound warm and friendly, like a gentle buddy. Keep sentences short. Ask only one clear question.",
-    "3-5": "Use upbeat, friendly language with kid energy. Use simple but engaging vocabulary. Ask the learner an inviting question.",
-    "6-8": "Use casual, friendly, relatable language. Slightly more mature tone, like a positive older sibling. Avoid sounding like a teacher.",
-    "9-12": "Use confident, real-world tone. Speak like a friendly mentor or coach. Keep it natural, not kiddie."
-  };
-
-  const tone = gradeBands[gradeLevel.toLowerCase()] || gradeBands["6-8"];
+  const gradeKey = gradeLevel.toLowerCase();
+  const band = gradeBands[gradeKey] || gradeBands["6-8"];
+  const tone = band.tone;
 
   // System prompt for the AI
   const systemPrompt = `
@@ -202,24 +347,35 @@ export default function useVoiceConversation({
         }
       }
 
-      // Add AI message
-      const msg = createMessage("ai", safeText, effectivePhase);
-      setMessages((prev) => {
-        const updated = [...prev, msg];
-        messagesRef.current = updated;
-        return updated;
-      });
+      // make sure we ONLY display final sentences, no rolling text
+      if (safeText.includes("...") || safeText.endsWith(",") || safeText.endsWith("--")) {
+        // likely partial text → wait for final
+        return;
+      }
 
-      // Speak message
+      // aiResponse = safeText (ensured final, no partials, no streaming, no interim)
+      const finalResponse = safeText;
+
+      // Speak message FIRST (no display until TTS finishes)
       try {
+        // Balanced timing rule: let students process
+        await delay(300 + Math.random() * 300);
         setIsSpeaking(true);
-        await playVoiceResponseWithOpenAI(safeText);
+        await playVoiceResponseWithOpenAI(finalResponse);
       } catch (err) {
         console.error("TTS error:", err);
         onError?.(err);
       } finally {
         setIsSpeaking(false);
       }
+
+      // Add AI message ONLY AFTER TTS finishes
+      const msg = createMessage("ai", finalResponse, effectivePhase);
+      setMessages((prev) => {
+        const updated = [...prev, msg];
+        messagesRef.current = updated;
+        return updated;
+      });
     },
     [onPhaseChange, onError]
   );
@@ -237,7 +393,7 @@ export default function useVoiceConversation({
 
     try {
       setIsLoading(true);
-      await unlockAudio();
+      // ⚠️ Audio is already unlocked by PracticeStartScreen before navigating here
 
       const topicId = scenarioRef.current?.topicId || scenarioRef.current?.topic || "";
       const topicName =
@@ -263,9 +419,10 @@ export default function useVoiceConversation({
 
       const turn1 = {
         aiResponse: introText,
-        nextPhase: PHASES.INTRO_2
+        nextPhase: PHASES.INTRO_PREVIEW
       };
 
+      await delay(600);
       await handleAIResult(turn1, PHASES.INTRO_1);
     } catch (err) {
       console.error("startConversation error:", err);
@@ -295,7 +452,7 @@ export default function useVoiceConversation({
 
       try {
         setIsLoading(true);
-        await unlockAudio();
+        // ⚠️ Audio is already unlocked by PracticeStartScreen
 
         const conversationHistory = messagesRef.current.map((m) => ({
           role: m.role === "ai" ? "assistant" : "user",
@@ -304,41 +461,194 @@ export default function useVoiceConversation({
         }));
 
       const topicId = scenarioRef.current?.topicId || scenarioRef.current?.topic || "";
+      const scenarioContext = scenarioRef.current;
+      const contextualizer = `We are practicing THIS scenario only: ${scenarioContext?.fullContext || scenarioContext?.preview || 'this practice scenario'}.
 
-      // INTRO TURN 2 - Check-in with learner
-      if (current === PHASES.INTRO_2) {
-        const turn2 = {
-          aiResponse: "Before we get started — how are you feeling today?",
-          nextPhase: PHASES.INTRO_3
+Do NOT invent a new scenario. Stay inside the same setting.`;
+
+      // INTRO_PREVIEW - Skill preview before practice
+      if (current === PHASES.INTRO_PREVIEW) {
+        const topicName = scenarioContext?.title || scenarioContext?.topicName || scenarioContext?.topicId || "today's skill";
+        const fullContext = scenarioContext?.fullContext || scenarioContext?.preview || "";
+        const tips = scenarioContext?.tips || [];
+
+        const previewLine = 
+          `Great! Before we start practicing, here's the big idea for today: we're focusing on ${topicName}. ${fullContext ? `Here's the scenario: ${fullContext}. ` : ''}I'll guide you step by step.`;
+
+        const turnPreview = {
+          aiResponse: previewLine,
+          nextPhase: PHASES.DEMONSTRATE,
+          scenarioContext: {
+            title: topicName,
+            fullContext,
+            tips
+          }
         };
-        await handleAIResult(turn2, PHASES.INTRO_2);
+
+        await delay(600);
+        await handleAIResult(turnPreview, PHASES.INTRO_PREVIEW);
         return;
       }
 
-      // INTRO TURN 3 - Transition to scenario
-      if (current === PHASES.INTRO_3) {
-        const topicName =
-          scenarioRef.current?.title ||
-          scenarioRef.current?.topicName ||
-          scenarioRef.current?.topicId ||
-          "today's skill";
+      // DEMONSTRATE - Fixed scripted demonstration
+      if (current === PHASES.DEMONSTRATE) {
+        const topicName = scenarioContext?.title || scenarioContext?.topicName || scenarioContext?.topicId || "today's skill";
+        const fullContext = scenarioContext?.fullContext || scenarioContext?.preview || "";
+        const tips = scenarioContext?.tips || [];
 
-        const turn3 = {
-          aiResponse: `Awesome. Let's jump in and practice ${topicName} together!`,
-          nextPhase: PHASES.SCENARIO
+        const demonstrateLine = 
+          `Let me show you how to handle ${topicName}. ${fullContext ? `Remember: ${fullContext}. ` : ''}Watch how I do it first, then you'll try!`;
+
+        const turnDemonstrate = {
+          aiResponse: demonstrateLine,
+          nextPhase: PHASES.REPEAT,
+          scenarioContext: {
+            title: topicName,
+            fullContext,
+            tips
+          }
         };
-        await handleAIResult(turn3, PHASES.INTRO_3);
+
+        await delay(600);
+        await handleAIResult(turnDemonstrate, PHASES.DEMONSTRATE);
+        return;
+      }
+
+      // REPEAT - Fixed scripted guided repetition
+      if (current === PHASES.REPEAT) {
+        const topicName = scenarioContext?.title || scenarioContext?.topicName || scenarioContext?.topicId || "today's skill";
+        const fullContext = scenarioContext?.fullContext || scenarioContext?.preview || "";
+        const tips = scenarioContext?.tips || [];
+
+        const repeatLine = 
+          `Great! Now it's your turn. Try saying that back to me, or put it in your own words.`;
+
+        const turnRepeat = {
+          aiResponse: repeatLine,
+          nextPhase: PHASES.SCENARIO,
+          scenarioContext: {
+            title: topicName,
+            fullContext,
+            tips
+          }
+        };
+
+        await delay(600);
+        await handleAIResult(turnRepeat, PHASES.REPEAT);
+        return;
+      }
+
+      // SCENARIO - Use teachingEngine and masteryEngine
+      if (current === PHASES.SCENARIO) {
+        // natural thinking time
+        await delay(400);
+        const engineResult = await generateConversationResponse({
+          conversationHistory,
+          gradeLevel: resolvedGradeLevel,
+          learnerName,
+          topicId,
+          currentPhase: current,
+          scenario: {
+            ...scenarioRef.current,
+            fullContext: scenarioContext?.fullContext || scenarioContext?.preview || "",
+            tips: scenarioContext?.tips || [],
+            title: scenarioContext?.title || scenarioContext?.topicName || scenarioContext?.topicId || ""
+          },
+          contextualizer,
+          streaming: false,
+          finalOnly: true,
+          disablePartial: true
+        });
+
+        const teaching = teachingEngine({
+          userMessage: trimmed,
+          topicId,
+          gradeLevel: resolvedGradeLevel,
+          learnerName,
+          dynamicScenario: engineResult.dynamicScenario
+        });
+
+        engineResult.aiResponse = teaching.ttsOutput;
+
+        // Mastery update
+        const masteryUpdate = evaluateTurn({
+          userMessage: trimmed,
+          topicId,
+          masteryState: masteryRef.current
+        });
+
+        masteryRef.current = masteryUpdate.masteryState;
+
+        await delay(600);
+        await handleAIResult(engineResult, current);
+        return;
+      }
+
+      // VARIATION - Use teachingEngine and masteryEngine
+      if (current === PHASES.VARIATION) {
+        // natural thinking time
+        await delay(400);
+        const engineResult = await generateConversationResponse({
+          conversationHistory,
+          gradeLevel: resolvedGradeLevel,
+          learnerName,
+          topicId,
+          currentPhase: current,
+          scenario: {
+            ...scenarioRef.current,
+            fullContext: scenarioContext?.fullContext || scenarioContext?.preview || "",
+            tips: scenarioContext?.tips || [],
+            title: scenarioContext?.title || scenarioContext?.topicName || scenarioContext?.topicId || ""
+          },
+          contextualizer,
+          streaming: false,
+          finalOnly: true,
+          disablePartial: true
+        });
+
+        const teaching = teachingEngine({
+          userMessage: trimmed,
+          topicId,
+          gradeLevel: resolvedGradeLevel,
+          learnerName,
+          dynamicScenario: engineResult.dynamicScenario
+        });
+
+        engineResult.aiResponse = teaching.ttsOutput;
+
+        // Mastery update
+        const masteryUpdate = evaluateTurn({
+          userMessage: trimmed,
+          topicId,
+          masteryState: masteryRef.current
+        });
+
+        masteryRef.current = masteryUpdate.masteryState;
+
+        await delay(600);
+        await handleAIResult(engineResult, current);
         return;
       }
 
       // NON-INTRO PHASES → use generateConversationResponse
+      // natural thinking time
+      await delay(400);
       const engineResult = await generateConversationResponse({
         conversationHistory,
         gradeLevel: resolvedGradeLevel,
         learnerName,
         topicId,
         currentPhase: current,
-        scenario: scenarioRef.current
+        scenario: {
+          ...scenarioRef.current,
+          fullContext: scenarioContext?.fullContext || scenarioContext?.preview || "",
+          tips: scenarioContext?.tips || [],
+          title: scenarioContext?.title || scenarioContext?.topicName || scenarioContext?.topicId || ""
+        },
+        contextualizer,
+        streaming: false,        // ensure final only
+        finalOnly: true,         // tell engine to return only final completions
+        disablePartial: true     // remove token-by-token updates
       });
 
       // teaching phase still handled normally
@@ -361,27 +671,9 @@ export default function useVoiceConversation({
           });
 
           masteryRef.current = masteryUpdate.masteryState;
-
-          // Adaptive next scenario
-          const topicMastery = masteryRef.current.topicMastery[topicId] || {
-            score: 0,
-            level: "easy"
-          };
-          const successRate = Math.min(1, Math.max(0, topicMastery.score / 100));
-
-          const nextScenario = generateAdaptiveScenario({
-            topicId,
-            gradeLevel: resolvedGradeLevel,
-            lastScenarioId: scenarioRef.current?.id || null,
-            previousDifficulty: topicMastery.level,
-            successRate
-          });
-
-          if (nextScenario) {
-            scenarioRef.current = nextScenario;
-          }
         }
 
+        await delay(600);
         await handleAIResult(engineResult, current);
       } catch (err) {
         console.error("sendUserMessage error:", err);

@@ -16,7 +16,6 @@ const SILENT_MP3_DATA_URL =
   'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU3LjgzLjEwMAAAAAAAAAAAAAAA//NAxAAAAANIAAAAABhkbHIAAAAAAAAAAABMYXZmNTcuODMuMTAw//NAxAAAAANIAAAAABxkYXRhAAAAAA==';
 
 let activeAudio = null;
-let activeAudioUrl = null;
 let openAIClient = null;
 let audioUnlocked = false;
 let pendingUnlockPromise = null;
@@ -53,17 +52,11 @@ function getOpenAIClient() {
 function stopOpenAITTSPlayback() {
   if (activeAudio) {
     try {
-      activeAudio.pause();
-      activeAudio.currentTime = 0;
-    } catch (error) {
-      console.warn('Unable to pause active audio', error);
+      activeAudio.stop(0);
+    } catch (e) {
+      // Buffer source may already be stopped
     }
     activeAudio = null;
-  }
-
-  if (activeAudioUrl) {
-    URL.revokeObjectURL(activeAudioUrl);
-    activeAudioUrl = null;
   }
 }
 
@@ -131,120 +124,66 @@ export async function unlockAudio() {
 
 export async function playVoiceResponseWithOpenAI(text, options = {}) {
   const trimmed = (text ?? '').toString().trim();
-  if (!trimmed) {
-    throw new Error('Cannot synthesize empty text');
-  }
-
-  console.log('🟢 Requesting OpenAI TTS with input:', trimmed);
-  console.log('📢 Intro text length:', trimmed.length);
-
-  if (typeof Audio === 'undefined') {
-    throw new Error('Audio playback is not supported in this environment');
-  }
+  if (!trimmed) throw new Error('Cannot synthesize empty text');
 
   const client = getOpenAIClient();
   const voice = options.voice || DEFAULT_VOICE;
   const model = options.model || DEFAULT_MODEL;
 
-  let ctxForPlayback = null;
-  try {
-    ctxForPlayback = await getAudioContext();
-  } catch (contextError) {
-    console.warn('⚠️ AudioContext not available for playback:', contextError);
-  }
+  // Ensure AudioContext is available and resumed
+  const ctx = await getAudioContext();
+  await ctx.resume();
 
-  if (!ctxForPlayback) {
-    console.warn('⚠️ AudioContext not initialized - unlockAudio() must be called first');
-  }
-
+  // Fetch TTS audio as arrayBuffer
   let speech;
   try {
     speech = await client.audio.speech.create({
       model,
       voice,
       input: trimmed,
-      format: 'mp3'
+      format: "mp3"
     });
   } catch (error) {
     throw new Error(`OpenAI TTS failed: ${error?.message || 'Unknown error'}`);
   }
 
-  const audioBuffer = await speech.arrayBuffer();
-  if (!audioBuffer || audioBuffer.byteLength === 0) {
+  const audioArrayBuffer = await speech.arrayBuffer();
+  if (!audioArrayBuffer || audioArrayBuffer.byteLength === 0) {
     throw new Error('OpenAI TTS returned empty audio buffer');
   }
-  const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
-  if (!audioBlob || audioBlob.size === 0) {
-    throw new Error('OpenAI TTS returned invalid audio blob');
-  }
-  console.log('📦 Audio blob details:', {
-    size: audioBlob.size,
-    type: audioBlob.type,
-    sizeKB: Number(audioBlob.size / 1024).toFixed(2)
-  });
 
+  // Decode MP3 into AudioBuffer
+  const audioBuffer = await ctx.decodeAudioData(audioArrayBuffer.slice(0));
+
+  // Stop any existing playback
   stopOpenAITTSPlayback();
 
-  const audioUrl = URL.createObjectURL(audioBlob);
-  const audio = new Audio(audioUrl);
-  audio.preload = 'auto';
-  audio.onloadeddata = () => console.log('✅ Audio loaded');
-  audio.onerror = (event) => {
-    console.error('❌ Audio element error:', {
-      event,
-      src: audio.src,
-      networkState: audio.networkState,
-      readyState: audio.readyState,
-      errorCode: audio.error?.code,
-      errorMessage: audio.error?.message
-    });
-  };
-  audio.addEventListener('canplaythrough', () => console.log('🎧 Audio can play through'), { once: true });
+  // Create buffer source
+  const source = ctx.createBufferSource();
+  source.buffer = audioBuffer;
 
-  activeAudio = audio;
-  activeAudioUrl = audioUrl;
+  // Connect to destination
+  source.connect(ctx.destination);
 
+  activeAudio = source;
+
+  // Optional callbacks
   options.onLoadStart?.();
-  audio.onloadeddata = () => options.onLoaded?.();
+  options.onStart?.();
 
   return new Promise((resolve, reject) => {
-    const handleError = (error) => {
-      stopOpenAITTSPlayback();
-      options.onError?.(error);
-      reject(error);
-    };
-
-    audio.onended = () => {
-      console.log('🔚 Audio finished');
-      stopOpenAITTSPlayback();
+    source.onended = () => {
+      activeAudio = null;
       options.onEnded?.();
       resolve();
     };
 
-    audio.onerror = () => {
-      handleError(new Error('Audio playback failed'));
-    };
-
-    const startPlayback = () => {
-      audio.removeEventListener('canplaythrough', startPlayback);
-      try {
-        const playPromise = audio.play();
-        if (playPromise?.then) {
-          playPromise
-            .then(() => options.onStart?.())
-            .catch(handleError);
-        } else {
-          options.onStart?.();
-        }
-      } catch (error) {
-        handleError(error);
-      }
-    };
-
-    audio.addEventListener('canplaythrough', startPlayback, { once: true });
-
-    if (audio.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
-      startPlayback();
+    try {
+      source.start(0);
+    } catch (err) {
+      activeAudio = null;
+      options.onError?.(err);
+      reject(err);
     }
   });
 }

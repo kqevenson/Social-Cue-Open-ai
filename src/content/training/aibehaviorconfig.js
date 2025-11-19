@@ -114,7 +114,10 @@ export function buildTeachingTurn({ gradeLevel, topicId, learnerMessage }) {
 export const PHASES = {
   INTRO_1: "intro-1",       // greeting
   INTRO_2: "intro-2",       // check-in
-  INTRO_3: "intro-3",       // scenario intro (“imagine this…”)
+  INTRO_3: "intro-3",       // scenario intro ("imagine this…")
+  INTRO_PREVIEW: "intro_preview", // skill preview before practice
+  DEMONSTRATE: "demonstrate", // demonstration phase
+  REPEAT: "repeat",         // guided repetition phase
   SCENARIO: "scenario",     // learner tries it
   TEACHING: "teaching",     // skill coaching
   VARIATION: "variation",   // new version of scenario

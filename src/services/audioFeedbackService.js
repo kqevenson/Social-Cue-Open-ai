@@ -1,8 +1,9 @@
+import { getAudioContext } from './openAITTSService';
+
 class AudioFeedbackService {
   constructor() {
-    // ⚠️ DO NOT create AudioContext here - create lazily only when needed
+    // ⚠️ DO NOT create AudioContext here - use shared AudioContext from openAITTSService
     // AudioContext must be created after user gesture via unlockAudio()
-    this.audioContext = null;
     this.sounds = {
       yourTurn: this.createToneSound(440, 0.1), // A4
       thinking: this.createToneSound(330, 0.1), // E4
@@ -11,22 +12,20 @@ class AudioFeedbackService {
     };
   }
 
-  // Lazy initialization - only create AudioContext when actually needed
+  // Use shared AudioContext from openAITTSService
   // This should only be called after unlockAudio() has been called
-  getAudioContext() {
-    if (!this.audioContext && typeof window !== 'undefined') {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (AudioCtx) {
-        this.audioContext = new AudioCtx();
-        console.log('✅ AudioFeedbackService: AudioContext created (should be after user gesture)');
-      }
+  async getAudioContext() {
+    try {
+      return await getAudioContext();
+    } catch (error) {
+      console.warn('⚠️ AudioFeedbackService: AudioContext not available - unlockAudio() must be called first');
+      return null;
     }
-    return this.audioContext;
   }
 
   createToneSound(frequency, duration) {
-    return () => {
-      const ctx = this.getAudioContext();
+    return async () => {
+      const ctx = await this.getAudioContext();
       if (!ctx) {
         console.warn('⚠️ AudioFeedbackService: AudioContext not available - unlockAudio() must be called first');
         return;

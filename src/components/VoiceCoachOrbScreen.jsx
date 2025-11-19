@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import localforage from 'localforage';
 import useVoiceConversation from '../hooks/useVoiceConversation';
 import { playVoiceResponseWithOpenAI, stopOpenAITTSPlayback } from '../services/openAITTSService';
+import { setHandlers, startRecognition, stopRecognition } from '../services/speechRecognitionService';
 import StorageService from '../services/storageService';
 
 const MAX_STORED_LINES = 40;
@@ -18,7 +19,8 @@ const VoiceCoachOrbScreen = ({
 }) => {
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState(null);
-  const [transcript, setTranscript] = useState([]);
+  const [transcript, setTranscript] = useState('');
+  const [aiLine, setAiLine] = useState('');
   const [phaseRestored, setPhaseRestored] = useState(false);
   const [userPrompt, setUserPrompt] = useState('Ready when you are');
   const [recognitionReady, setRecognitionReady] = useState(false);
@@ -51,11 +53,21 @@ const VoiceCoachOrbScreen = ({
 
   const { messages, phase, isSpeaking, isLoading, sendUserMessage, startConversation } = conversation;
 
-  // Update transcript from messages
+  // Update AI line from messages and manage transcript display
   useEffect(() => {
-    const newTranscript = messages.map(m => m.text).filter(Boolean);
-    setTranscript(newTranscript.slice(-MAX_STORED_LINES));
-  }, [messages]);
+    const aiMessages = messages.filter(m => m.role === 'ai');
+    if (aiMessages.length > 0) {
+      const latestAI = aiMessages[aiMessages.length - 1];
+      if (isSpeaking) {
+        // When AI is speaking, show AI line and clear transcript
+        setAiLine(latestAI.text || '');
+        setTranscript('');
+      } else {
+        // When AI finishes, keep showing AI line until learner speaks
+        setAiLine(latestAI.text || '');
+      }
+    }
+  }, [messages, isSpeaking]);
 
   const appendTranscript = useCallback((line) => {
     if (!line) return;
@@ -69,10 +81,7 @@ const VoiceCoachOrbScreen = ({
   }, []);
 
   const cleanup = useCallback(() => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-    }
+    stopRecognition();
     if (listeningTimeoutRef.current) {
       clearTimeout(listeningTimeoutRef.current);
       listeningTimeoutRef.current = null;
@@ -166,72 +175,31 @@ const VoiceCoachOrbScreen = ({
     [appendTranscript, sendUserMessage, stopListening, resumeListeningAfterDelay, isSpeaking]
   );
 
-  // Initialize speech recognition synchronously
+  // Initialize speech recognition handlers
   useEffect(() => {
     if (!scenario) {
       setError(MISSING_SCENARIO_MESSAGE);
       return;
     }
 
-    if (!('webkitSpeechRecognition' in window)) {
-      console.warn('[VoiceCoachOrbScreen] Speech recognition is not supported.');
-      return;
-    }
-
-    // Synchronous creation (Safari-friendly)
-    const recognition = new window.webkitSpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-
-    recognition.onresult = (event) => {
-      const result = event.results[event.resultIndex];
-
-      if (result.isFinal) {
-        const text = result[0].transcript.trim();
-        if (text) {
-          console.debug('[VoiceCoach] Final speech:', text);
-          handleUserMessage(text);
-        }
+    setHandlers({
+      onInterim: (interim) => {
+        setAiLine('');
+        setTranscript(interim);
+      },
+      onFinal: async (finalText) => {
+        stopRecognition();
+        setTranscript(finalText);
+        await sendUserMessage(finalText);
+      },
+      onError: () => {},
+      onEnd: () => {
+        if (!isSpeaking) startRecognition();
       }
-    };
+    });
 
-    recognition.onerror = (event) => {
-      if (event.error === 'not-allowed') {
-        setError('Microphone access is blocked.');
-        return;
-      }
-      console.error('Speech error:', event.error);
-    };
-
-    recognition.onend = () => {
-      console.debug('[VoiceCoach] onend fired');
-
-      if (!cancelledRef.current && isListeningRef.current && !isSpeaking) {
-        setTimeout(() => {
-          try {
-            console.debug('[VoiceCoach] Restarting speech recognition...');
-            recognition.start();
-          } catch (e) {
-            console.warn('[VoiceCoach] Could not restart recognition:', e);
-          }
-        }, 250); // delay fixes Safari abort bug
-      }
-    };
-
-    recognitionRef.current = recognition;
     setRecognitionReady(true);
-
-    // Auto-start mic when component mounts (audio already unlocked by PracticeStartScreen)
-    try {
-      shouldIgnoreInputRef.current = false;
-      recognition.start();
-      isListeningRef.current = true;
-      setIsListening(true);
-    } catch (err) {
-      console.warn('[VoiceCoachOrbScreen] Failed to start mic on mount:', err);
-    }
-  }, [scenario, handleUserMessage]);
+  }, [scenario, sendUserMessage, isSpeaking]);
 
   // Restore persisted phase
   useEffect(() => {
@@ -257,42 +225,29 @@ const VoiceCoachOrbScreen = ({
     };
   }, []);
 
-  const handleStartPractice = useCallback(async () => {
-    try {
-      // ⚠️ CRITICAL: unlockAudio() creates AudioContext - must be called on user gesture
-      await unlockAudio();
-      console.log('✅ Audio unlocked, starting practice session');
-      
-      setIsAudioUnlocked(true);
-      setSessionPrimed(true);
-      
-      // Start mic after audio is unlocked
-      try {
-        shouldIgnoreInputRef.current = false;
-        if (recognitionRef.current) {
-          recognitionRef.current.start();
-          isListeningRef.current = true;
-          setIsListening(true);
-        }
-      } catch (err) {
-        console.warn("Failed to start mic after unlock:", err);
-      }
-      
-      // Start conversation
-      startConversation();
-    } catch (error) {
-      console.error('Failed to unlock audio:', error);
-      setError('Failed to start practice. Please try again.');
+  // Auto-start conversation when component mounts with scenario
+  useEffect(() => {
+    if (!scenario) return;
+    if (!recognitionReady) return;
+
+    // Start conversation automatically
+    startConversation();
+  }, [scenario, recognitionReady, startConversation]);
+
+  // After AI finishes speaking, restart recognition
+  useEffect(() => {
+    if (!isSpeaking && recognitionReady) {
+      setIsListening(true);
+      startRecognition();
     }
-  }, [startConversation]);
+  }, [isSpeaking, recognitionReady]);
 
   const statusText = useMemo(() => {
-    if (!sessionPrimed) return 'Tap "Start Practice" to begin.';
     if (isSpeaking) return '🔊 Speaking...';
     if (isListening) return '💡 Listening... speak naturally!';
     if (isLoading) return '🤖 Thinking...';
     return 'Ready when you are';
-  }, [isListening, isLoading, isSpeaking, sessionPrimed]);
+  }, [isListening, isLoading, isSpeaking]);
 
 
   // Handle phase completion
@@ -308,21 +263,14 @@ const VoiceCoachOrbScreen = ({
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(15,118,246,0.12),_transparent_60%)]" />
 
       <div className="relative z-10 flex flex-col items-center text-center gap-8 px-6">
-        <div
-          className={`orb ${isSpeaking ? 'orb--speaking' : isListening ? 'orb--listening' : 'orb--idle'}`}
-        />
+        <div className="orb-container mb-12">
+          <div className={`orb ${isSpeaking ? 'orb--speaking' : isListening ? 'orb--listening' : 'orb--idle'}`} />
+          <div className={`orb-glow ${isSpeaking ? 'glow--speaking' : isListening ? 'glow--listening' : ''}`} />
+        </div>
 
         <div className="space-y-3 max-w-2xl w-full">
           <p className="text-lg font-medium text-cyan-100 drop-shadow-sm">{statusText}</p>
-          {!sessionPrimed && !error && (
-            <button
-              onClick={handleStartPractice}
-              className="mt-4 px-8 py-4 bg-gradient-to-r from-blue-500 to-emerald-400 text-white font-semibold rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-cyan-400"
-            >
-              🎤 Start Practice
-            </button>
-          )}
-          {userPrompt && !error && sessionPrimed && (
+          {userPrompt && !error && (
             <p className="text-sm text-cyan-100/80">{userPrompt}</p>
           )}
           {error && (
@@ -332,15 +280,13 @@ const VoiceCoachOrbScreen = ({
           )}
         </div>
 
-        <div className="flex flex-col gap-2 max-w-xl mt-4 text-white/90 text-sm">
-          {transcript.map((line, idx) => (
-            <p
-              key={idx}
-              className="bg-white/5 rounded-xl px-4 py-2 border border-white/10"
-            >
-              {line}
-            </p>
-          ))}
+        <div className="w-full max-w-3xl px-8 text-left">
+          {aiLine && (
+            <p className="text-white/80 text-lg mb-4">{aiLine}</p>
+          )}
+          {transcript && (
+            <p className="text-white/90 text-lg whitespace-pre-wrap">{transcript}</p>
+          )}
         </div>
       </div>
     </div>
