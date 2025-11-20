@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Play, ArrowRight, MessageCircle, Brain, Users, Sparkles, Check, Star } from 'lucide-react';
+import AnimatedLogo from './socialcue/AnimatedLogo';
 
 export default function LandingPage({ onGetStarted }) {
   const [scrollY, setScrollY] = useState(0);
@@ -30,25 +31,8 @@ export default function LandingPage({ onGetStarted }) {
       {/* Hero Section */}
       <section className="relative px-6 pt-20 pb-32 min-h-screen flex items-center justify-center">
         <div className="max-w-7xl mx-auto text-center">
-          <div className="flex items-end justify-center mb-8" style={{letterSpacing: '-2px'}}>
-            <span className="font-extrabold text-5xl text-white">Social</span>
-            <span className="font-extrabold text-5xl text-white" style={{marginRight: '6px'}}>C</span>
-            <div className="flex flex-col items-center justify-end" style={{marginBottom: '7px', height: '62px', gap: '10px'}}>
-              <div className="flex smile-eyes" style={{gap: '16px'}}>
-                <div className="rounded-full" style={{width: '7px', height: '7px', background: '#4A90E2'}}></div>
-                <div className="rounded-full" style={{width: '7px', height: '7px', background: '#4A90E2'}}></div>
-              </div>
-              <div className="smile-mouth" style={{
-                width: '35px',
-                height: '22px',
-                borderLeft: '5px solid #34D399',
-                borderRight: '5px solid #34D399',
-                borderBottom: '5px solid #34D399',
-                borderTop: 'none',
-                borderRadius: '0 0 17px 17px'
-              }}></div>
-            </div>
-            <span className="font-extrabold text-5xl text-white" style={{marginLeft: '6px'}}>e</span>
+          <div className="mb-8">
+            <AnimatedLogo darkMode={true} />
           </div>
           
           <p className="text-xl md:text-2xl text-gray-300 mb-12 max-w-3xl mx-auto">
@@ -370,37 +354,6 @@ export default function LandingPage({ onGetStarted }) {
         </div>
       </footer>
 
-      <style>{`
-        @keyframes smileWiggle {
-          0%, 100% { 
-            transform: translateY(0) scaleY(1);
-          }
-          50% { 
-            transform: translateY(-2px) scaleY(1.1);
-          }
-        }
-        
-        @keyframes eyeBlink {
-          0%, 90%, 100% { 
-            transform: scaleY(1);
-          }
-          95% { 
-            transform: scaleY(0.1);
-          }
-        }
-        .smile-mouth {
-          animation: smileWiggle 3s ease-in-out infinite;
-          transform-origin: top center;
-        }
-        
-        .smile-eyes > div {
-          animation: eyeBlink 6s ease-in-out infinite;
-        }
-        
-        .smile-eyes > div:nth-child(2) {
-          animation-delay: 0.15s;
-        }
-      `}</style>
     </div>
   );
 }

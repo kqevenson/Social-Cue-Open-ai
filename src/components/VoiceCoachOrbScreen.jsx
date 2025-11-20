@@ -31,7 +31,6 @@ const VoiceCoachOrbScreen = ({
   const isListeningRef = useRef(false);
   const cancelledRef = useRef(false);
   const hasInitializedRef = useRef(false);
-  const shouldIgnoreInputRef = useRef(false);
   const listeningTimeoutRef = useRef(null);
 
   const storedUser = StorageService.getUserData();
@@ -86,7 +85,6 @@ const VoiceCoachOrbScreen = ({
       clearTimeout(listeningTimeoutRef.current);
       listeningTimeoutRef.current = null;
     }
-    shouldIgnoreInputRef.current = true;
     isListeningRef.current = false;
     setIsListening(false);
     stopOpenAITTSPlayback();
@@ -120,14 +118,12 @@ const VoiceCoachOrbScreen = ({
     setIsListening(false);
   }, []);
 
-  const resumeListeningAfterDelay = useCallback((delay = 800) => {
-    shouldIgnoreInputRef.current = false;
+  const resumeListeningAfterDelay = useCallback((delay = 2000) => {
     if (listeningTimeoutRef.current) {
       clearTimeout(listeningTimeoutRef.current);
     }
     listeningTimeoutRef.current = setTimeout(() => {
       if (!cancelledRef.current && recognitionRef.current) {
-        shouldIgnoreInputRef.current = false;
         startListening();
       }
       listeningTimeoutRef.current = null;
@@ -152,23 +148,28 @@ const VoiceCoachOrbScreen = ({
       const text = (rawText || '').trim();
       if (!text) return;
 
-      if (shouldIgnoreInputRef.current || isSpeaking) {
-        console.debug('[VoiceCoachOrbScreen] Ignoring speech during suppression window:', text);
+      console.log("🔥 USER MESSAGE RECEIVED:", text);
+      if (isSpeaking) {
+        console.debug("AI still speaking, ignoring transcript:", text);
         return;
       }
 
       stopListening();
       appendTranscript(text);
 
+      // Silence-capture delay before sending user message
+      await new Promise(r => setTimeout(r, 1200));
+
       try {
         // Use the hook's sendUserMessage - it handles all conversation logic
+        console.log("➡️ Sending to AI:", text);
         await sendUserMessage(text);
       } catch (conversationError) {
         console.error('Voice conversation error:', conversationError);
         setError('Sorry, something went wrong. Please try again.');
       } finally {
         if (!cancelledRef.current && !isSpeaking) {
-          resumeListeningAfterDelay(1500);
+          resumeListeningAfterDelay(2000); // 2 seconds minimum
         }
       }
     },
@@ -190,7 +191,12 @@ const VoiceCoachOrbScreen = ({
       onFinal: async (finalText) => {
         stopRecognition();
         setTranscript(finalText);
-        await sendUserMessage(finalText);
+        // Silence-capture delay before sending user message
+        await new Promise(r => setTimeout(r, 1200));
+        if (!isSpeaking && !isLoading) {
+          console.log("➡️ Sending to AI:", finalText);
+          await sendUserMessage(finalText);
+        }
       },
       onError: () => {},
       onEnd: () => {
@@ -263,9 +269,70 @@ const VoiceCoachOrbScreen = ({
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(15,118,246,0.12),_transparent_60%)]" />
 
       <div className="relative z-10 flex flex-col items-center text-center gap-8 px-6">
-        <div className="orb-container mb-12">
-          <div className={`orb ${isSpeaking ? 'orb--speaking' : isListening ? 'orb--listening' : 'orb--idle'}`} />
-          <div className={`orb-glow ${isSpeaking ? 'glow--speaking' : isListening ? 'glow--listening' : ''}`} />
+        <div className="relative flex items-center justify-center mb-12">
+          <div
+            className={`absolute inset-0 rounded-full blur-3xl transition-all duration-700 ${
+              isSpeaking
+                ? "bg-emerald-400/40 scale-150"
+                : isListening
+                ? "bg-blue-400/40 scale-125 animate-pulse-slow"
+                : "bg-gray-400/20 scale-100"
+            }`}
+          />
+          <div
+            className={`relative w-64 h-64 rounded-full flex items-center justify-center transition-all duration-500 ${
+              isSpeaking
+                ? "bg-gradient-to-br from-emerald-400/30 to-emerald-600/30 border-emerald-400/50 scale-105"
+                : isListening
+                ? "bg-gradient-to-br from-blue-400/30 to-blue-600/30 border-blue-400/50"
+                : "bg-gradient-to-br from-gray-400/20 to-gray-600/20 border-gray-400/30"
+            } border-2 backdrop-blur-xl`}
+          >
+            <div
+              className={`smiley-bounce transition-all duration-500 ${
+                isSpeaking ? "scale-110" : "scale-100"
+              }`}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "30px"
+              }}
+            >
+              <div className="eyes-blink flex" style={{ gap: "48px" }}>
+                <div
+                  className="eye-left rounded-full"
+                  style={{
+                    width: "21px",
+                    height: "21px",
+                    background: "#4A90E2",
+                    boxShadow: "0 0 20px rgba(74,144,226,0.8)"
+                  }}
+                />
+                <div
+                  className="eye-right rounded-full"
+                  style={{
+                    width: "21px",
+                    height: "21px",
+                    background: "#4A90E2",
+                    boxShadow: "0 0 20px rgba(74,144,226,0.8)"
+                  }}
+                />
+              </div>
+
+              <div
+                style={{
+                  width: "105px",
+                  height: "66px",
+                  borderLeft: "15px solid #34D399",
+                  borderRight: "15px solid #34D399",
+                  borderBottom: "15px solid #34D399",
+                  borderRadius: "0 0 52px 52px",
+                  filter: "drop-shadow(0 0 25px rgba(52,211,153,0.6))"
+                }}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="space-y-3 max-w-2xl w-full">
@@ -289,6 +356,61 @@ const VoiceCoachOrbScreen = ({
           )}
         </div>
       </div>
+
+      <style>{`
+@keyframes pulse-slow {
+  0%,100% { opacity:1; }
+  50% { opacity:.7; }
+}
+.animate-pulse-slow {
+  animation: pulse-slow 2s ease-in-out infinite;
+}
+
+@keyframes smileyBounce {
+  0%,100% { transform: translateY(0px); }
+  50% { transform: translateY(-5px); }
+}
+.smiley-bounce {
+  animation: smileyBounce 2.5s ease-in-out infinite;
+}
+
+@keyframes eyesBlink {
+  0%,90%,100% { transform: scaleY(1); }
+  93% { transform: scaleY(.2); }
+  94%,96% { transform: scaleY(0); }
+  97% { transform: scaleY(.2); }
+}
+.eyes-blink {
+  animation: eyesBlink 3.5s ease-in-out infinite;
+  animation-delay: .5s;
+}
+
+@keyframes leftEyeWink {
+  0%,90%,100% { transform: scaleY(1); }
+  94%,96% { transform: scaleY(0); }
+}
+.eye-left {
+  animation: leftEyeWink 7s ease-in-out infinite;
+  animation-delay: 2s;
+}
+
+@keyframes rightEyeWink {
+  0%,90%,100% { transform: scaleY(1); }
+  94%,96% { transform: scaleY(0); }
+}
+.eye-right {
+  animation: rightEyeWink 8s ease-in-out infinite;
+  animation-delay: 5s;
+}
+
+.smiley-bounce,
+.smiley-bounce *,
+.eyes-blink,
+.eye-left,
+.eye-right {
+  transition: none !important;
+}
+      `}</style>
     </div>
   );
 };

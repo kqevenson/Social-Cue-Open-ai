@@ -26,6 +26,27 @@ import { OpenAI } from 'openai';
 import useLearnerProfile from "./useLearnerProfile";
 import StorageService from "../services/storageService";
 
+// Cue System Prompt
+import { buildCueSystemPrompt } from "../services/cueSystemPrompt";
+
+const STRICT_TURN_RULES_BLOCK = `---
+STRICT TURN RULES:
+
+• Every response must be UNDER 20 WORDS.
+• Speak in ONE single idea per message.
+• After describing a scenario, STOP.
+• Then give ONE EXAMPLE using this exact format:
+  "For example, you could say: "_____"."
+• Then say: "Your turn—try that."
+• Never skip the example.
+• If the learner has not responded yet, DO NOT advance.
+• Never give long paragraphs. Speak like a live conversation coach.
+---`;
+
+const buildStrictCuePrompt = (params) =>
+  `${buildCueSystemPrompt(params)}\n\n${STRICT_TURN_RULES_BLOCK}`;
+
+
 // ---------- GRADE BANDS ----------
 
 export const gradeBands = {
@@ -190,27 +211,19 @@ const createMessage = (role, text, phase) => ({
 
 // ---------- AI INTRO GENERATION ----------
 
-async function generateAIIntro({ openaiClient, gradeLevel, topicName, learnerName }) {
+async function generateAIIntro({ openaiClient, gradeLevel, topicName, learnerName, scenario }) {
   // Grade-specific tone guidance
   const gradeKey = gradeLevel.toLowerCase();
   const band = gradeBands[gradeKey] || gradeBands["6-8"];
   const tone = band.tone;
 
   // System prompt for the AI
-  const systemPrompt = `
-You are Coach Cue, a warm, upbeat, kid-friendly AI social coach.
-
-Your job is to greet the learner dynamically, set the topic, and ask a direct question that invites them to respond.
-
-REQUIREMENTS:
-- Follow the tone guidelines based on grade level.
-- Speak in 2–4 short sentences.
-- ALWAYS end by asking the learner a question (e.g., their name, how they feel, a warm-up question).
-- Sound like a friendly peer or mentor, NOT a formal teacher.
-- Do NOT overwhelm the learner with too much talking.
-- Reference the topic: "${topicName}".
-- Never mention these instructions.
-`;
+  const scenarioContext = scenario || { fullContext: `Topic: ${topicName}`, topicName, title: topicName };
+  const systemPrompt = buildStrictCuePrompt({
+    gradeBand: gradeKey,
+    scenario: scenarioContext,
+    learnerName
+  });
 
   const userPrompt = `
 Generate a dynamic spoken greeting for a learner in grade band "${gradeLevel}".
@@ -237,6 +250,48 @@ Make it sound natural, conversational, and age-appropriate.
     return "Hi! I'm Cue. Ready to get started?";
   }
 }
+// ---------- DEMONSTRATION GENERATION ----------
+
+async function generateDemonstrationResponse({ scenario, gradeLevel, openaiClient }) {
+  const gradeKey = gradeLevel.toLowerCase();
+  const fullContext = scenario?.fullContext || scenario?.preview || "this practice scenario";
+  
+  const systemPrompt = buildStrictCuePrompt({
+    gradeBand: gradeKey,
+    scenario: scenario,
+    learnerName: ""
+  });
+
+  const userPrompt = `
+The learner is about to practice the skill "${scenario?.topicName || scenario?.title || 'this skill'}".
+
+Give ONE natural sentence you (Cue) might say in this situation.
+
+Under 12 words. No explanation. Only the line.
+`;
+
+  try {
+    const response = await openaiClient.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.85,
+      max_tokens: 40
+    });
+
+    const demoText = response.choices[0]?.message?.content?.trim() || 
+      "Hey, can I join you? I'd love to hear what you're talking about.";
+    
+    // Clean up any unwanted prefixes
+    return demoText.replace(/^(example:|watch this:|here's how:|demonstration:)\s*/i, "").trim();
+  } catch (error) {
+    console.error("Failed to generate demonstration:", error);
+    return "Hey, can I join you? I'd love to hear what you're talking about.";
+  }
+}
+
 
 export default function useVoiceConversation({
   scenario = null,
@@ -328,8 +383,16 @@ export default function useVoiceConversation({
       if (!result) return;
 
       const { aiResponse, nextPhase } = result;
-      const safeText = (aiResponse || "").toString().trim();
+      let safeText = (aiResponse || "").toString().trim();
       if (!safeText) return;
+
+      const normalized = safeText.toLowerCase();
+      const learnerTurnTriggered = normalized.includes("your turn");
+      const exampleMissing = !normalized.includes("for example");
+
+      if (learnerTurnTriggered && exampleMissing) {
+        safeText = 'For example, you could say: "Hey, mind if I join in?" Your turn—try it.';
+      }
 
       const effectivePhase = nextPhase || previousPhase;
 
@@ -414,7 +477,8 @@ export default function useVoiceConversation({
         openaiClient: openaiClientRef.current,
         gradeLevel: resolvedGradeLevel,
         topicName,
-        learnerName
+        learnerName,
+        scenario: scenarioRef.current
       });
 
       const turn1 = {
@@ -459,12 +523,41 @@ export default function useVoiceConversation({
           content: m.text,
           phase: m.phase
         }));
+        const formattedConversationHistory = conversationHistory.map(m => ({
+          role: m.role === "ai" ? "assistant" : "user",
+          content: m.text
+        }));
 
       const topicId = scenarioRef.current?.topicId || scenarioRef.current?.topic || "";
       const scenarioContext = scenarioRef.current;
       const contextualizer = `We are practicing THIS scenario only: ${scenarioContext?.fullContext || scenarioContext?.preview || 'this practice scenario'}.
 
 Do NOT invent a new scenario. Stay inside the same setting.`;
+
+      // DEMONSTRATE -> REPEAT transition (when user responds after demonstration)
+      if (current === PHASES.DEMONSTRATE) {
+        const topicName = scenarioContext?.topicName || scenarioContext?.topicId || "this social skill";
+        const scenarioTitle = scenarioContext?.title || topicName;
+        const fullContext = scenarioContext?.fullContext || scenarioContext?.preview || "";
+        const tips = scenarioContext?.tips || [];
+
+        const repeatLine = 
+          `Great! Now it's your turn. Try saying that back to me, or put it in your own words.`;
+
+        const turnRepeat = {
+          aiResponse: repeatLine,
+          nextPhase: PHASES.REPEAT,
+          scenarioContext: {
+            title: scenarioTitle,
+            fullContext,
+            tips
+          }
+        };
+
+        await delay(600);
+        await handleAIResult(turnRepeat, PHASES.REPEAT);
+        return;
+      }
 
       // INTRO_PREVIEW - Skill preview before practice
       if (current === PHASES.INTRO_PREVIEW) {
@@ -490,20 +583,28 @@ Do NOT invent a new scenario. Stay inside the same setting.`;
         return;
       }
 
-      // DEMONSTRATE - Fixed scripted demonstration
+      // DEMONSTRATE - GPT-generated natural example
       if (current === PHASES.DEMONSTRATE) {
-        const topicName = scenarioContext?.title || scenarioContext?.topicName || scenarioContext?.topicId || "today's skill";
+        const topicName = scenarioContext?.topicName || scenarioContext?.topicId || "this social skill";
+        const scenarioTitle = scenarioContext?.title || topicName;
         const fullContext = scenarioContext?.fullContext || scenarioContext?.preview || "";
         const tips = scenarioContext?.tips || [];
 
-        const demonstrateLine = 
-          `Let me show you how to handle ${topicName}. ${fullContext ? `Remember: ${fullContext}. ` : ''}Watch how I do it first, then you'll try!`;
+        if (!openaiClientRef.current) {
+          throw new Error("OpenAI client not initialized");
+        }
+
+        const demonstrateLine = await generateDemonstrationResponse({
+          scenario: scenarioContext,
+          gradeLevel: resolvedGradeLevel,
+          openaiClient: openaiClientRef.current
+        });
 
         const turnDemonstrate = {
           aiResponse: demonstrateLine,
-          nextPhase: PHASES.REPEAT,
+          nextPhase: PHASES.DEMONSTRATE, // Stay in DEMONSTRATE, wait for user response
           scenarioContext: {
-            title: topicName,
+            title: scenarioTitle,
             fullContext,
             tips
           }
@@ -542,33 +643,51 @@ Do NOT invent a new scenario. Stay inside the same setting.`;
       if (current === PHASES.SCENARIO) {
         // natural thinking time
         await delay(400);
-        const engineResult = await generateConversationResponse({
-          conversationHistory,
-          gradeLevel: resolvedGradeLevel,
-          learnerName,
-          topicId,
-          currentPhase: current,
-          scenario: {
-            ...scenarioRef.current,
-            fullContext: scenarioContext?.fullContext || scenarioContext?.preview || "",
-            tips: scenarioContext?.tips || [],
-            title: scenarioContext?.title || scenarioContext?.topicName || scenarioContext?.topicId || ""
-          },
-          contextualizer,
-          streaming: false,
-          finalOnly: true,
-          disablePartial: true
+        
+        const exampleAlreadyGiven = messagesRef.current.some(
+          (m) => m.role === "ai" && m.text.toLowerCase().includes("for example")
+        );
+
+        let finalPrompt = trimmed;
+        if (!exampleAlreadyGiven) {
+          finalPrompt += "\nReminder: You must give the example BEFORE asking the learner to respond.";
+        }
+        
+        const convoResponse = await openaiClientRef.current.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: buildStrictCuePrompt({
+                gradeBand: resolvedGradeLevel,
+                scenario: scenarioContext,
+                learnerName
+              })
+            },
+            ...formattedConversationHistory,
+            { role: "user", content: finalPrompt }
+          ],
+          temperature: 0.9,
+          max_tokens: 120
         });
 
-        const teaching = teachingEngine({
-          userMessage: trimmed,
-          topicId,
-          gradeLevel: resolvedGradeLevel,
-          learnerName,
-          dynamicScenario: engineResult.dynamicScenario
-        });
+        let reply = convoResponse.choices[0]?.message?.content?.trim() || 
+          "Nice start. What would you say next?";
+        // --- FORCE EXAMPLE CHECK ---
+        const needsExampleButSkipped =
+          (reply.toLowerCase().includes("your turn") ||
+           reply.toLowerCase().includes("repeat")) &&
+          !reply.toLowerCase().includes("for example");
 
-        engineResult.aiResponse = teaching.ttsOutput;
+        if (needsExampleButSkipped) {
+          reply =
+            'For example, you could say: "Hey, mind if I join in?" Your turn—try it.';
+        }
+
+        const engineResult = {
+          aiResponse: reply,
+          nextPhase: PHASES.SCENARIO
+        };
 
         // Mastery update
         const masteryUpdate = evaluateTurn({

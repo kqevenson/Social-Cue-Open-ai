@@ -3,6 +3,7 @@ import { Play, Clock, Sparkles, TrendingUp, MessageCircle, Ear, Users, Zap, Load
 import { getSessionProgress } from './utils/storage';
 import { getLearnerProfile, getSessionStats, getAllTopicMastery, getLessonProgressStats } from '../../firebaseHelpers';
 import { DifficultyBadge } from './utils/difficultyLevels.jsx';
+import AnimatedLogo from './AnimatedLogo';
 
 function HomeScreen({ userData, onNavigate, darkMode, soundEffects }) {
   // Debug: Log userData to see what we're getting
@@ -117,26 +118,7 @@ function HomeScreen({ userData, onNavigate, darkMode, soundEffects }) {
       <div className="relative z-10 max-w-7xl mx-auto px-6 py-8">
         <header className="mb-8">
           <div className="flex items-center justify-between mb-8">
-            <div className="flex items-end justify-center" style={{letterSpacing: '-2px'}}>
-              <span className={`font-extrabold text-5xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>Social</span>
-              <span className={`font-extrabold text-5xl ${darkMode ? 'text-white' : 'text-gray-900'}`} style={{marginRight: '6px'}}>C</span>
-              <div className="flex flex-col items-center justify-end" style={{marginBottom: '7px', height: '62px', gap: '10px'}}>
-                <div className="flex smile-eyes" style={{gap: '16px'}}>
-                  <div className="rounded-full" style={{width: '7px', height: '7px', background: '#4A90E2'}}></div>
-                  <div className="rounded-full" style={{width: '7px', height: '7px', background: '#4A90E2'}}></div>
-                </div>
-                <div className="smile-mouth" style={{
-                  width: '35px',
-                  height: '22px',
-                  borderLeft: '5px solid #34D399',
-                  borderRight: '5px solid #34D399',
-                  borderBottom: '5px solid #34D399',
-                  borderTop: 'none',
-                  borderRadius: '0 0 17px 17px'
-                }}></div>
-              </div>
-              <span className={`font-extrabold text-5xl ${darkMode ? 'text-white' : 'text-gray-900'}`} style={{marginLeft: '6px'}}>e</span>
-            </div>
+            <AnimatedLogo darkMode={darkMode} />
 
             <div className="text-right">
               <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Welcome back,</div>
@@ -276,7 +258,7 @@ function HomeScreen({ userData, onNavigate, darkMode, soundEffects }) {
                 <div className="p-5 flex-1 flex flex-col">
                   <div className="flex items-center justify-between mb-4">
                     <span className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{session.category}</span>
-                    <DifficultyBadge level={session.difficultyLevel || 1} darkMode={darkMode} size="xs" />
+                    <DifficultyBadge level={session.difficultyLevel || 1} darkMode={darkMode} size="xs" showIcon={false} />
                   </div>
                   <div className="flex-1"></div>
                   <button onClick={() => onNavigate('practiceHome')} className="w-full bg-blue-500 text-white font-bold py-2.5 rounded-full flex items-center justify-center gap-2 hover:bg-blue-600 transition-all text-sm mb-4">

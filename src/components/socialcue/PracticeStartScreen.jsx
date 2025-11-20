@@ -187,7 +187,7 @@ const PracticeStartScreen = ({ topicName, gradeLevel, learnerName, onStartSessio
 
     setTimeout(() => {
       const scenarioObject = {
-        title: scenario.scenarioTitle,
+        title: topicName,        // Always use the selected topic!
         topicName,
         gradeLevel,
         preview: scenario.shortPreview,
