@@ -4,11 +4,10 @@ import VoiceCoachOrbScreen from "../VoiceCoachOrbScreen";
 import {
   topics as voicePracticeTopics,
   getScenariosForTopic,
-  getGradeBandFromGrade
+  getGradeBandFromGrade,
 } from "../../data/voicePracticeScenarios";
 import { AI_BEHAVIOR_CONFIG } from "../../content/training/aibehaviorconfig";
-
-const FALLBACK_ICON = "💬";
+import { ArrowRight } from "lucide-react";
 
 const PracticeScreen = ({ darkMode }) => {
   const [userGradeBand, setUserGradeBand] = useState("6-8");
@@ -16,6 +15,7 @@ const PracticeScreen = ({ darkMode }) => {
   const [learnerName, setLearnerName] = useState("");
   const [pendingTopic, setPendingTopic] = useState(null);
   const [selectedSession, setSelectedSession] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     try {
@@ -24,61 +24,46 @@ const PracticeScreen = ({ darkMode }) => {
         const parsed = JSON.parse(stored);
         const rawGrade = parsed?.gradeLevel || parsed?.grade || "6";
         const numeric = parseInt(String(rawGrade).replace(/[^0-9]/g, "") || "6", 10);
-        const band = getGradeBandFromGrade(numeric).toLowerCase();
-        setUserGradeBand(band);
         setUserGradeNumber(Number.isNaN(numeric) ? 6 : numeric);
+        setUserGradeBand(getGradeBandFromGrade(numeric).toLowerCase());
 
         const possibleName =
           parsed?.firstName ||
-          parsed?.first_name ||
           parsed?.profile?.firstName ||
-          parsed?.profile?.name ||
           parsed?.displayName ||
+          parsed?.username ||
           parsed?.name ||
           "";
         setLearnerName(possibleName);
-        return;
       }
-    } catch (err) {
-      console.warn("Failed to parse grade level from localStorage", err);
-    }
-    setUserGradeBand("6-8");
-    setUserGradeNumber(6);
+    } catch {}
   }, []);
 
   const topicPreviews = useMemo(() => {
     return voicePracticeTopics.map((topic) => {
-      const gradeScenarios = getScenariosForTopic(topic.id, userGradeNumber || 6) || [];
-      const sampleScenario = gradeScenarios?.[0] || null;
-      const scenarioTitles = gradeScenarios.map((scenario) => scenario.title).filter(Boolean);
-
+      const scenarios = getScenariosForTopic(topic.id, userGradeNumber) || [];
       return {
         topic,
-        gradeScenarios,
-        sampleScenario,
-        scenarioTitles
+        scenarios,
       };
     });
   }, [userGradeNumber]);
 
-  const handleStartPractice = (topic) => {
-    // Set pendingTopic instead of creating scenario directly
-    setPendingTopic(topic);
-  };
+  const filteredTopics = topicPreviews.filter(({ topic }) =>
+    topic.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  // Show PracticeStartScreen when pendingTopic is set
   if (pendingTopic) {
     return (
       <PracticeStartScreen
         topicName={pendingTopic.title}
-        gradeLevel={userGradeNumber || 6}
+        gradeLevel={userGradeNumber}
         learnerName={learnerName}
         onStartSession={(scenarioObject) => {
-          // Set selectedSession with the structure: { scenario, learnerName, gradeLevel }
           setSelectedSession({
             scenario: scenarioObject,
-            learnerName: learnerName || "",
-            gradeLevel: userGradeBand || "6-8"
+            learnerName: learnerName,
+            gradeLevel: userGradeBand,
           });
           setPendingTopic(null);
         }}
@@ -87,13 +72,12 @@ const PracticeScreen = ({ darkMode }) => {
     );
   }
 
-  // Show VoiceCoachOrbScreen when session starts (only when selectedSession is NOT null)
   if (selectedSession) {
     return (
       <VoiceCoachOrbScreen
-        key={selectedSession.scenario?.id || selectedSession.scenario?.scenarioId || `session-${Date.now()}`}
+        key={selectedSession.scenario?.id || `session-${Date.now()}`}
         scenario={selectedSession.scenario}
-        gradeLevel={selectedSession.gradeLevel || selectedSession.scenario?.gradeLevel}
+        gradeLevel={selectedSession.gradeLevel}
         learnerName={selectedSession.learnerName}
         behaviorConfig={AI_BEHAVIOR_CONFIG}
         autoStart={true}
@@ -106,50 +90,71 @@ const PracticeScreen = ({ darkMode }) => {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
-      <h1 className={`text-4xl font-bold mb-6 ${darkMode ? "text-white" : "text-gray-900"}`}>
-        Practice
-      </h1>
-      <p className={`mb-8 text-lg ${darkMode ? "text-gray-400" : "text-gray-700"}`}>
-        Pick a topic to try a conversation.
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {topicPreviews.map(({ topic, gradeScenarios, sampleScenario, scenarioTitles }) => (
-          <div
-            key={topic.id}
-            className={`rounded-3xl p-6 border transition-all hover:shadow-xl cursor-pointer ${
-              darkMode ? "bg-white/5 text-white border-white/10" : "bg-white text-gray-900 border-gray-200"
-            }`}
-            onClick={() => handleStartPractice(topic)}
-          >
-            <div className="text-4xl mb-4">{topic.icon || FALLBACK_ICON}</div>
-            <h2 className="text-2xl font-semibold mb-2">{topic.title}</h2>
-            {topic.description && <p className="text-sm mb-3">{topic.description}</p>}
+    <div className="relative min-h-screen w-full bg-[#020412] text-white flex justify-center px-6 py-20 overflow-hidden">
+      {/* Background Glow Blobs */}
+      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-blue-500/25 blur-[200px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-emerald-400/25 blur-[200px] rounded-full pointer-events-none" />
 
-            {sampleScenario && (
-              <div className={`${darkMode ? "bg-white/10" : "bg-blue-50"} rounded-xl p-4`}>
-                <p className="text-sm font-medium">
-                  Example: <span className="italic">{sampleScenario.title}</span>
+      <div className="relative z-10 w-full max-w-7xl">
+        <h1 className="text-6xl font-extrabold mb-6 bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+          Practice
+        </h1>
+        <p className="text-xl text-gray-300 mb-12 max-w-2xl">
+          Explore and practice real-world social communication skills.
+        </p>
+
+        {/* Search Bar */}
+        <div className="w-full mb-12">
+          <input
+            type="text"
+            placeholder="Search topics..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-6 py-4 rounded-2xl bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:border-blue-400 backdrop-blur-xl"
+          />
+        </div>
+
+        {/* Topics Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+          {filteredTopics.map(({ topic }, index) => (
+            <div
+              key={topic.id}
+              onClick={() => setPendingTopic(topic)}
+              className="relative group cursor-pointer rounded-[2rem] p-10 bg-white/5 backdrop-blur-2xl border border-white/10 shadow-lg transform transition-all duration-500 hover:scale-[1.04] active:scale-[0.97] hover:bg-white/10 hover:shadow-blue-500/20"
+              style={{ animationDelay: `${index * 80}ms` }}
+            >
+              {/* Hover Glow */}
+              <div className="absolute inset-0 rounded-[2rem] opacity-0 group-hover:opacity-100 transition-all duration-500 bg-[radial-gradient(circle_at_center,rgba(96,165,250,0.4),transparent_70%)]" />
+
+              <div className="relative z-10">
+                <h2 className="text-3xl font-semibold mb-3 tracking-tight bg-gradient-to-r from-blue-300 to-emerald-300 bg-clip-text text-transparent">
+                  {topic.title}
+                </h2>
+                <p className="text-base text-gray-300 leading-relaxed mb-6">
+                  {topic.description}
                 </p>
-                {sampleScenario.contextLine && (
-                  <p className="text-xs mt-1 text-gray-500 dark:text-gray-300">{sampleScenario.contextLine}</p>
-                )}
+
+                {/* Minimal bottom indicator instead of example */}
+                <div className="flex items-center gap-2 text-blue-300 mt-4 opacity-80 group-hover:opacity-100 transition-all">
+                  <ArrowRight className="w-5 h-5" />
+                  <span className="font-medium tracking-wide">Open Topic</span>
+                </div>
               </div>
-            )}
-
-            {scenarioTitles.length > 1 && (
-              <p className="text-xs mt-3 text-gray-500 dark:text-gray-300">
-                Includes scenarios like {scenarioTitles.slice(0, 3).join(", ")}
-                {scenarioTitles.length > 3 ? " and more." : "."}
-              </p>
-            )}
-
-            <button className="mt-4 inline-block px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-500">
-              Start Session
-            </button>
-          </div>
-        ))}
+            </div>
+          ))}
+        </div>
       </div>
+
+      {/* Animations */}
+      <style>{`
+        @keyframes fade-in-up {
+          from { opacity: 0; transform: translateY(12px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+          animation: fade-in-up 0.8s ease forwards;
+        }
+      `}</style>
     </div>
   );
 };

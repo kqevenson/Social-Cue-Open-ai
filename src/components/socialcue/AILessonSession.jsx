@@ -169,6 +169,21 @@ function AILessonSession({ sessionId, onNavigate, darkMode, gradeLevel, soundEff
           'Be respectful to others',
           'Listen carefully',
           'Think before you act'
+        ],
+        examples: [
+          {
+            title: 'Good Example',
+            description: 'Approaching someone with a smile and friendly greeting'
+          },
+          {
+            title: 'What to Avoid',
+            description: 'Interrupting when others are talking'
+          }
+        ],
+        tips: [
+          'Take your time',
+          'Be yourself',
+          'Practice makes perfect'
         ]
       },
       practice: {

@@ -128,7 +128,7 @@ export function getNextPhase(phase) {
   switch (phase) {
     case PHASES.INTRO_1: return PHASES.INTRO_2;
     case PHASES.INTRO_2: return PHASES.INTRO_3;
-    case PHASES.INTRO_3: return PHASES.SCENARIO;
+    case PHASES.INTRO_3: return PHASES.INTRO_PREVIEW;
     case PHASES.SCENARIO: return PHASES.TEACHING;
     case PHASES.TEACHING: return PHASES.VARIATION;
     default: return PHASES.COMPLETE;

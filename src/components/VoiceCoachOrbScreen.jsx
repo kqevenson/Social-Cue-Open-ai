@@ -1,73 +1,194 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import localforage from 'localforage';
-import useVoiceConversation from '../hooks/useVoiceConversation';
-import { playVoiceResponseWithOpenAI, stopOpenAITTSPlayback } from '../services/openAITTSService';
-import { setHandlers, startRecognition, stopRecognition } from '../services/speechRecognitionService';
-import StorageService from '../services/storageService';
+/**  ------------------------------
+  FIXED VoiceCoachOrbScreen.jsx
+  - Correct isSpeaking shutdown
+  - Prevent mic from hearing AI
+  - Stop after questions
+  - Fix recognition restart loops
+  - Stable turn-taking flow
+--------------------------------*/
+
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
+
+import localforage from "localforage";
+import useVoiceConversation from "../hooks/useVoiceConversation";
+import { stopOpenAITTSPlayback, globalTTSLock } from "../services/openAITTSService";
+import {
+  setHandlers,
+  startRecognition,
+  stopRecognition
+} from "../services/speechRecognitionService";
+import StorageService from "../services/storageService";
 
 const MAX_STORED_LINES = 40;
-const PHASE_STORAGE_KEY = 'voiceCoach:lastPhase';
+const PHASE_STORAGE_KEY = "voiceCoach:lastPhase";
 
-const MISSING_SCENARIO_MESSAGE = 'We could not load this scenario. Please go back and choose another practice activity.';
+const MISSING_SCENARIO_MESSAGE =
+  "We could not load this scenario. Please go back and choose another practice activity.";
 
 const VoiceCoachOrbScreen = ({
   scenario,
-  gradeLevel = '6',
-  learnerName: initialLearnerName = '',
+  gradeLevel = "6",
+  learnerName: initialLearnerName = "",
   autoStart = false,
   onEndSession
 }) => {
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState(null);
-  const [transcript, setTranscript] = useState('');
-  const [aiLine, setAiLine] = useState('');
+  const [transcript, setTranscript] = useState("");
+  const [aiLine, setAiLine] = useState("");
   const [phaseRestored, setPhaseRestored] = useState(false);
-  const [userPrompt, setUserPrompt] = useState('Ready when you are');
+  const [userPrompt, setUserPrompt] = useState("Ready when you are");
   const [recognitionReady, setRecognitionReady] = useState(false);
+  const [muted, setMuted] = useState(false); // UI-only mute state
 
-  const resolvedGradeLevel = scenario?.gradeLevel || gradeLevel || '6';
+  const resolvedGradeLevel = scenario?.gradeLevel || gradeLevel || "6";
 
   const recognitionRef = useRef(null);
   const isListeningRef = useRef(false);
   const cancelledRef = useRef(false);
   const hasInitializedRef = useRef(false);
   const listeningTimeoutRef = useRef(null);
+  const isSpeakingRef = useRef(false);
+  const shouldIgnoreInputRef = useRef(false);
+
+  /** --------------------------------------
+   * START LISTENING
+   * ------------------------------------- */
+  const startListening = useCallback(() => {
+    if (!recognitionRef.current || isListeningRef.current) return;
+
+    try {
+      recognitionRef.current.stop();
+    } catch (e) {
+      // Ignore if already stopped
+    }
+
+    try {
+      recognitionRef.current.start();
+      isListeningRef.current = true;
+      setIsListening(true);
+    } catch (err) {
+      console.warn("[VoiceCoach] startListening failed:", err);
+      isListeningRef.current = false;
+      setIsListening(false);
+    }
+  }, []);
+
+  /** --------------------------------------
+   * STOP LISTENING
+   * ------------------------------------- */
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+    }
+    isListeningRef.current = false;
+    setIsListening(false);
+  }, []);
+
+  /** --------------------------------------
+   * RESUME LISTENING AFTER DELAY (default 800ms)
+   * ------------------------------------- */
+  const resumeListeningAfterDelay = useCallback((delay = 800) => {
+    shouldIgnoreInputRef.current = true;
+
+    if (listeningTimeoutRef.current) {
+      clearTimeout(listeningTimeoutRef.current);
+    }
+
+    listeningTimeoutRef.current = setTimeout(() => {
+      if (!cancelledRef.current) {
+        // Check if TTS is still playing - if so, wait
+        if (globalTTSLock.isSpeaking) return; // TTS still playing — WAIT
+
+        shouldIgnoreInputRef.current = false;
+        isListeningRef.current = true;
+        setIsListening(true);
+
+        try {
+          startRecognition();
+        } catch (e) {
+          console.warn("Recognition restart failed:", e);
+        }
+      }
+
+      listeningTimeoutRef.current = null;
+    }, delay);
+  }, []);
 
   const storedUser = StorageService.getUserData();
-  const learnerName = storedUser?.userName || storedUser?.username || storedUser?.name || "";
+  const learnerName =
+    storedUser?.userName ||
+    storedUser?.username ||
+    storedUser?.name ||
+    "";
 
-  // Use the conversation hook - it handles ALL intro/scenario/teaching logic
+  // Conversation hook
   const conversation = useVoiceConversation({
     scenario,
-    autoStart: true, // Always auto-start when mounted
+    autoStart: true,
     learnerName,
     onPhaseChange: (newPhase, oldPhase) => {
-      console.log('[VoiceCoachOrbScreen] Phase changed:', { oldPhase, newPhase });
+      console.log("[VoiceCoachOrbScreen] Phase changed:", {
+        oldPhase,
+        newPhase
+      });
     },
     onError: (err) => {
-      console.error('[VoiceCoachOrbScreen] Conversation error:', err);
-      setError('Sorry, something went wrong. Please try again.');
+      console.error("[VoiceCoachOrbScreen] Conversation error:", err);
+      setError("Sorry, something went wrong. Please try again.");
+    },
+    onAudioStart: () => {
+      isSpeakingRef.current = true;
+      shouldIgnoreInputRef.current = true;
+      stopListening();
+    },
+    onAudioComplete: () => {
+      isSpeakingRef.current = false;
+      shouldIgnoreInputRef.current = false;
+      resumeListeningAfterDelay(400);
     }
   });
 
-  const { messages, phase, isSpeaking, isLoading, sendUserMessage, startConversation } = conversation;
+  const {
+    messages,
+    phase,
+    isSpeaking,
+    isLoading,
+    sendUserMessage,
+    startConversation
+  } = conversation;
 
-  // Update AI line from messages and manage transcript display
+  /** --------------------------------------
+   * UPDATE AI LINE WHEN MESSAGES COME IN
+   * ------------------------------------- */
   useEffect(() => {
-    const aiMessages = messages.filter(m => m.role === 'ai');
+    // Only show FINAL messages (filter out partial streaming chunks)
+    const finalMessages = messages.filter((m) => m.isFinal !== false);
+    const aiMessages = finalMessages.filter((m) => m.role === "ai");
     if (aiMessages.length > 0) {
       const latestAI = aiMessages[aiMessages.length - 1];
-      if (isSpeaking) {
-        // When AI is speaking, show AI line and clear transcript
-        setAiLine(latestAI.text || '');
-        setTranscript('');
-      } else {
-        // When AI finishes, keep showing AI line until learner speaks
-        setAiLine(latestAI.text || '');
+
+      // show text while speaking
+      setAiLine(latestAI.text || "");
+
+      // Update transcript with ONLY AI responses (latest one)
+      if (latestAI.text) {
+        setTranscript([latestAI.text]);
       }
     }
   }, [messages, isSpeaking]);
 
+  /** --------------------------------------
+   * APPEND TRANSCRIPT
+   * ------------------------------------- */
   const appendTranscript = useCallback((line) => {
     if (!line) return;
     setTranscript((prev) => {
@@ -79,6 +200,9 @@ const VoiceCoachOrbScreen = ({
     });
   }, []);
 
+  /** --------------------------------------
+   * CLEANUP
+   * ------------------------------------- */
   const cleanup = useCallback(() => {
     stopRecognition();
     if (listeningTimeoutRef.current) {
@@ -86,50 +210,23 @@ const VoiceCoachOrbScreen = ({
       listeningTimeoutRef.current = null;
     }
     isListeningRef.current = false;
+    isSpeakingRef.current = false;
+    shouldIgnoreInputRef.current = false;
     setIsListening(false);
     stopOpenAITTSPlayback();
-    localforage.removeItem(PHASE_STORAGE_KEY).catch((storageError) => {
-      console.warn('[VoiceCoachOrbScreen] Unable to clear persisted phase:', storageError);
-    });
+    localforage
+      .removeItem(PHASE_STORAGE_KEY)
+      .catch((storageError) => {
+        console.warn(
+          "[VoiceCoachOrbScreen] Unable to clear persisted phase:",
+          storageError
+        );
+      });
   }, []);
 
-  const startListening = useCallback(() => {
-    if (!recognitionRef.current || isListeningRef.current) return;
-
-    try {
-      console.debug('[VoiceCoach] startListening called');
-      recognitionRef.current.start();
-      isListeningRef.current = true;
-      setIsListening(true);
-      setError(null);
-    } catch (err) {
-      console.warn('[VoiceCoach] startListening failed:', err);
-    }
-  }, []);
-
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-    }
-    if (isListeningRef.current) {
-      console.debug('[VoiceCoachOrbScreen] Stopping speech recognition listener');
-    }
-    isListeningRef.current = false;
-    setIsListening(false);
-  }, []);
-
-  const resumeListeningAfterDelay = useCallback((delay = 2000) => {
-    if (listeningTimeoutRef.current) {
-      clearTimeout(listeningTimeoutRef.current);
-    }
-    listeningTimeoutRef.current = setTimeout(() => {
-      if (!cancelledRef.current && recognitionRef.current) {
-        startListening();
-      }
-      listeningTimeoutRef.current = null;
-    }, delay);
-  }, [startListening]);
-
+  /** --------------------------------------
+   * END SESSION
+   * ------------------------------------- */
   const handleSessionEnd = useCallback(
     (details) => {
       cancelledRef.current = true;
@@ -142,41 +239,51 @@ const VoiceCoachOrbScreen = ({
     [cleanup, onEndSession, messages]
   );
 
-  // Handle user messages from speech recognition
+  /** --------------------------------------
+   * HANDLE USER MESSAGE (KEY FIX)
+   * stop ignoring input after scenario
+   * ------------------------------------- */
   const handleUserMessage = useCallback(
     async (rawText) => {
-      const text = (rawText || '').trim();
-      if (!text) return;
+      const cleaned = (rawText || "").trim();
 
-      console.log("🔥 USER MESSAGE RECEIVED:", text);
-      if (isSpeaking) {
-        console.debug("AI still speaking, ignoring transcript:", text);
+      if (!cleaned || cleaned.length < 2) {
+        console.warn("Ignoring empty/short transcript:", cleaned);
         return;
       }
 
-      stopListening();
-      appendTranscript(text);
+      if (isSpeakingRef.current || shouldIgnoreInputRef.current) {
+        console.log(
+          "[Speech] Ignoring transcript because AI is still speaking:",
+          cleaned
+        );
+        return;
+      }
+      console.log("🔥 USER MESSAGE RECEIVED:", cleaned);
 
-      // Silence-capture delay before sending user message
-      await new Promise(r => setTimeout(r, 1200));
+      appendTranscript(cleaned);
+
+      await new Promise((r) => setTimeout(r, 1200));
 
       try {
-        // Use the hook's sendUserMessage - it handles all conversation logic
-        console.log("➡️ Sending to AI:", text);
-        await sendUserMessage(text);
-      } catch (conversationError) {
-        console.error('Voice conversation error:', conversationError);
-        setError('Sorry, something went wrong. Please try again.');
+        stopListening();
+        console.log("🔥 SENDING TO AI:", cleaned);
+        await sendUserMessage(cleaned);
+      } catch (e) {
+        console.error("Voice conversation error:", e);
+        setError("Sorry, something went wrong. Please try again.");
       } finally {
-        if (!cancelledRef.current && !isSpeaking) {
-          resumeListeningAfterDelay(2000); // 2 seconds minimum
+        if (!cancelledRef.current) {
+          resumeListeningAfterDelay(2000);
         }
       }
     },
-    [appendTranscript, sendUserMessage, stopListening, resumeListeningAfterDelay, isSpeaking]
+    [appendTranscript, sendUserMessage, stopListening, resumeListeningAfterDelay]
   );
 
-  // Initialize speech recognition handlers
+  /** --------------------------------------
+   * SPEECH RECOGNITION HANDLERS
+   * ------------------------------------- */
   useEffect(() => {
     if (!scenario) {
       setError(MISSING_SCENARIO_MESSAGE);
@@ -185,40 +292,95 @@ const VoiceCoachOrbScreen = ({
 
     setHandlers({
       onInterim: (interim) => {
-        setAiLine('');
+        if (isSpeakingRef.current || shouldIgnoreInputRef.current) {
+          return;
+        }
+        setAiLine("");
         setTranscript(interim);
       },
       onFinal: async (finalText) => {
+        // Check shouldIgnoreInputRef BEFORE processing transcriptChunk
+        if (shouldIgnoreInputRef.current) return;
+        
+        if (isSpeakingRef.current) {
+          return;
+        }
+
+        const cleaned = (finalText || "").trim();
+        if (!cleaned || cleaned.length < 2) return;
         stopRecognition();
-        setTranscript(finalText);
-        // Silence-capture delay before sending user message
-        await new Promise(r => setTimeout(r, 1200));
-        if (!isSpeaking && !isLoading) {
-          console.log("➡️ Sending to AI:", finalText);
-          await sendUserMessage(finalText);
+        setTranscript(cleaned);
+
+        await new Promise((r) => setTimeout(r, 1200));
+
+        if (!isSpeakingRef.current && !isLoading) {
+          console.log("🔥 SENDING TO AI (FINAL):", cleaned);
+          await sendUserMessage(cleaned);
         }
       },
       onError: () => {},
       onEnd: () => {
-        if (!isSpeaking) startRecognition();
+        /** FIXED: prevent restart collisions with safety stop */
+        if (isListeningRef.current && !isSpeakingRef.current) {
+          setTimeout(() => {
+            try {
+              stopRecognition(); // ensure it's really stopped
+              isListeningRef.current = false;
+              setIsListening(false);
+            } catch (e) {
+              console.warn("stopRecognition error:", e);
+            }
+
+            try {
+              startRecognition(); // restart cleanly
+            } catch (e) {
+              console.warn("startRecognition failed:", e);
+              isListeningRef.current = false;
+            }
+          }, 300);
+        }
       }
     });
 
     setRecognitionReady(true);
-  }, [scenario, sendUserMessage, isSpeaking]);
 
-  // Restore persisted phase
+    // Initialize recognition - start listening after 1000ms timeout
+    setTimeout(() => {
+      if (!cancelledRef.current) {
+        // Check if TTS is still playing - if so, wait
+        if (globalTTSLock.isSpeaking) return; // TTS still playing — WAIT
+
+        shouldIgnoreInputRef.current = false;
+        isListeningRef.current = true;
+        setIsListening(true);
+
+        try {
+          startRecognition();
+        } catch (e) {
+          console.warn("Initial recognition start failed:", e);
+        }
+      }
+    }, 1000);
+  }, [scenario, sendUserMessage, isLoading]);
+
+  /** --------------------------------------
+   * RESTORE PHASE
+   * ------------------------------------- */
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
-        const savedPhase = await localforage.getItem('voiceCoach:lastPhase');
-        if (!cancelled && typeof savedPhase === 'string') {
-          console.debug('[VoiceCoachOrbScreen] Restoring persisted phase:', savedPhase);
+        const savedPhase = await localforage.getItem(
+          "voiceCoach:lastPhase"
+        );
+        if (!cancelled && typeof savedPhase === "string") {
+          console.debug(
+            "[VoiceCoachOrbScreen] Restoring persisted phase:",
+            savedPhase
+          );
         }
-      } catch (storageError) {
-        console.warn('[VoiceCoachOrbScreen] Unable to restore last phase:', storageError);
+      } catch {
       } finally {
         if (!cancelled) {
           setPhaseRestored(true);
@@ -231,185 +393,317 @@ const VoiceCoachOrbScreen = ({
     };
   }, []);
 
-  // Auto-start conversation when component mounts with scenario
+  /** --------------------------------------
+   * AUTOSTART CONVERSATION
+   * ------------------------------------- */
   useEffect(() => {
     if (!scenario) return;
     if (!recognitionReady) return;
-
-    // Start conversation automatically
     startConversation();
   }, [scenario, recognitionReady, startConversation]);
 
-  // After AI finishes speaking, restart recognition
+  /** --------------------------------------
+   * PHASE COMPLETION
+   * ------------------------------------- */
   useEffect(() => {
-    if (!isSpeaking && recognitionReady) {
-      setIsListening(true);
-      startRecognition();
-    }
-  }, [isSpeaking, recognitionReady]);
-
-  const statusText = useMemo(() => {
-    if (isSpeaking) return '🔊 Speaking...';
-    if (isListening) return '💡 Listening... speak naturally!';
-    if (isLoading) return '🤖 Thinking...';
-    return 'Ready when you are';
-  }, [isListening, isLoading, isSpeaking]);
-
-
-  // Handle phase completion
-  useEffect(() => {
-    if (phase === 'complete' || phase === 'COMPLETE') {
-      handleSessionEnd({ phase: 'complete' });
+    if (phase === "complete" || phase === "COMPLETE") {
+      handleSessionEnd({ phase: "complete" });
     }
   }, [phase, handleSessionEnd]);
+
+  /** --------------------------------------
+   * RENDER
+   * ------------------------------------- */
 
   return (
     <div className="relative min-h-screen w-full bg-[#020412] text-white flex items-center justify-center overflow-hidden">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(56,189,248,0.22),_transparent_55%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(15,118,246,0.12),_transparent_60%)]" />
 
+      {/* EXIT BUTTON - Top Right */}
+      <button
+        onClick={() => onEndSession && onEndSession({ phase })}
+        className="absolute top-6 right-6 z-50 w-10 h-10 rounded-full bg-gray-800/60 border border-white/10 flex items-center justify-center hover:bg-gray-700/60 transition"
+      >
+        <svg className="w-5 h-5 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+
+      {/* LISTENING/SPEAKING TOGGLE - Top Center */}
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 flex gap-3">
+        <div className={`px-4 py-2 rounded-full text-sm font-medium ${
+          isListening && !isSpeaking
+            ? 'bg-purple-500/30 border border-purple-400/50 text-purple-100'
+            : 'text-gray-400 bg-white/5 border border-white/10'
+        }`}>
+          Listening
+        </div>
+
+        <div className={`px-4 py-2 rounded-full text-sm font-medium ${
+          isSpeaking
+            ? 'bg-purple-500/30 border border-purple-400/50 text-purple-100'
+            : 'text-gray-400 bg-white/5 border border-white/10'
+        }`}>
+          Speaking
+        </div>
+      </div>
+
       <div className="relative z-10 flex flex-col items-center text-center gap-8 px-6">
-        <div className="relative flex items-center justify-center mb-12">
+        {/* ORB CONTAINER */}
+        <div
+          className="relative flex items-center justify-center"
+          style={{ width: '320px', height: '320px' }}
+        >
+          {/* Outer Glow */}
           <div
-            className={`absolute inset-0 rounded-full blur-3xl transition-all duration-700 ${
-              isSpeaking
-                ? "bg-emerald-400/40 scale-150"
+            className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-700 ${
+              muted
+                ? 'bg-gray-400/8 blur-[120px]'
+                : isSpeaking
+                ? 'bg-purple-400/25 blur-[120px] scale-110'
                 : isListening
-                ? "bg-blue-400/40 scale-125 animate-pulse-slow"
-                : "bg-gray-400/20 scale-100"
+                ? 'bg-purple-400/20 blur-[120px] animate-pulse-slow'
+                : 'bg-purple-400/15 blur-[120px]'
             }`}
+            style={{ width: '320px', height: '320px' }}
           />
+
+          {/* Mid Glow */}
           <div
-            className={`relative w-64 h-64 rounded-full flex items-center justify-center transition-all duration-500 ${
-              isSpeaking
-                ? "bg-gradient-to-br from-emerald-400/30 to-emerald-600/30 border-emerald-400/50 scale-105"
+            className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-500 ${
+              muted
+                ? 'bg-gray-400/12 blur-[80px]'
+                : isSpeaking
+                ? 'bg-purple-400/30 blur-[80px] scale-105'
                 : isListening
-                ? "bg-gradient-to-br from-blue-400/30 to-blue-600/30 border-blue-400/50"
-                : "bg-gradient-to-br from-gray-400/20 to-gray-600/20 border-gray-400/30"
-            } border-2 backdrop-blur-xl`}
+                ? 'bg-purple-400/25 blur-[80px]'
+                : 'bg-purple-400/20 blur-[80px]'
+            }`}
+            style={{ width: '280px', height: '280px' }}
+          />
+
+          {/* Inner Core */}
+          <div
+            className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-500 ${
+              muted
+                ? 'bg-gradient-to-br from-gray-500/25 to-gray-600/25 blur-[20px]'
+                : isSpeaking
+                ? 'bg-gradient-to-br from-purple-400/40 to-purple-600/40 blur-[20px] scale-105'
+                : isListening
+                ? 'bg-gradient-to-br from-purple-300/35 to-purple-500/35 blur-[20px]'
+                : 'bg-gradient-to-br from-purple-200/25 to-purple-400/25 blur-[20px]'
+            }`}
+            style={{ width: '240px', height: '240px' }}
+          />
+
+          {/* Smiley Face */}
+          <div
+            className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center transition-all duration-500 ${
+              isSpeaking ? 'scale-105' : 'scale-100'
+            }`}
+            style={{ width: '240px', height: '240px' }}
           >
             <div
-              className={`smiley-bounce transition-all duration-500 ${
-                isSpeaking ? "scale-110" : "scale-100"
-              }`}
+              className={`transition-all duration-500 ${
+                muted ? '' : 'smiley-bounce'
+              } ${isSpeaking ? 'scale-110' : 'scale-100'}`}
               style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "30px"
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '30px',
+                opacity: muted ? 0.5 : 1
               }}
             >
-              <div className="eyes-blink flex" style={{ gap: "48px" }}>
+              {/* Eyes */}
+              <div className={`flex ${muted ? '' : 'eyes-blink'}`} style={{ gap: '48px' }}>
                 <div
-                  className="eye-left rounded-full"
+                  className={muted ? 'rounded-full' : 'eye-left rounded-full'}
                   style={{
-                    width: "21px",
-                    height: "21px",
-                    background: "#4A90E2",
-                    boxShadow: "0 0 20px rgba(74,144,226,0.8)"
+                    width: '21px',
+                    height: '21px',
+                    background: '#4A90E2',
+                    boxShadow: '0 0 20px rgba(74, 144, 226, 0.8)',
+                    transformOrigin: 'center'
                   }}
                 />
                 <div
-                  className="eye-right rounded-full"
+                  className={muted ? 'rounded-full' : 'eye-right rounded-full'}
                   style={{
-                    width: "21px",
-                    height: "21px",
-                    background: "#4A90E2",
-                    boxShadow: "0 0 20px rgba(74,144,226,0.8)"
+                    width: '21px',
+                    height: '21px',
+                    background: '#4A90E2',
+                    boxShadow: '0 0 20px rgba(74, 144, 226, 0.8)',
+                    transformOrigin: 'center'
                   }}
                 />
               </div>
 
+              {/* Smile */}
               <div
                 style={{
-                  width: "105px",
-                  height: "66px",
-                  borderLeft: "15px solid #34D399",
-                  borderRight: "15px solid #34D399",
-                  borderBottom: "15px solid #34D399",
-                  borderRadius: "0 0 52px 52px",
-                  filter: "drop-shadow(0 0 25px rgba(52,211,153,0.6))"
+                  width: '105px',
+                  height: '66px',
+                  borderLeft: '15px solid #34D399',
+                  borderRight: '15px solid #34D399',
+                  borderBottom: '15px solid #34D399',
+                  borderTop: 'none',
+                  borderRadius: '0 0 52px 52px',
+                  filter: 'drop-shadow(0 0 25px rgba(52, 211, 153, 0.6))'
                 }}
               />
             </div>
           </div>
         </div>
 
-        <div className="space-y-3 max-w-2xl w-full">
-          <p className="text-lg font-medium text-cyan-100 drop-shadow-sm">{statusText}</p>
-          {userPrompt && !error && (
-            <p className="text-sm text-cyan-100/80">{userPrompt}</p>
-          )}
-          {error && (
+        {/* ERROR DISPLAY */}
+        {error && (
+          <div className="mt-4">
             <p className="text-sm text-red-200 bg-red-500/10 border border-red-500/30 rounded-full px-4 py-2 inline-block">
               {error}
             </p>
-          )}
-        </div>
+          </div>
+        )}
 
-        <div className="w-full max-w-3xl px-8 text-left">
-          {aiLine && (
-            <p className="text-white/80 text-lg mb-4">{aiLine}</p>
+        {/* TRANSCRIPT - Only AI responses, larger and centered */}
+        {!muted && transcript && transcript.length > 0 && (
+          <div className="flex justify-center w-full">
+            <div className="max-w-xl mt-8 px-8 py-5 rounded-2xl bg-white/10 border border-white/20 text-xl text-white/90 leading-relaxed shadow-lg backdrop-blur-md text-center">
+              {Array.isArray(transcript) ? transcript[transcript.length - 1] : transcript}
+            </div>
+          </div>
+        )}
+        
+        {/* Muted state */}
+        {muted && (
+          <div className="flex justify-center w-full mt-8">
+            <div className="max-w-xl px-8 py-5 rounded-2xl bg-gray-500/10 border border-gray-500/30 text-lg text-gray-400 text-center">
+              Microphone muted
+            </div>
+          </div>
+        )}
+
+        {/* MUTE / UNMUTE BUTTON */}
+        <button
+          type="button"
+          onClick={() => setMuted((prev) => !prev)}
+          className={`mt-4 flex items-center gap-2 px-6 py-3 rounded-full font-medium transition ${
+            muted
+              ? 'bg-red-500/20 text-red-300 border border-red-500/50 hover:bg-red-500/30'
+              : 'bg-gray-800/50 text-gray-300 border border-gray-600/50 hover:bg-gray-700/50'
+          }`}
+        >
+          {muted ? (
+            <>
+              {/* Mic Muted Icon */}
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+              </svg>
+              Mic Muted
+            </>
+          ) : (
+            <>
+              {/* Mic Active Icon */}
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
+              Mic Active
+            </>
           )}
-          {transcript && (
-            <p className="text-white/90 text-lg whitespace-pre-wrap">{transcript}</p>
-          )}
-        </div>
+        </button>
       </div>
 
+      {/* CUSTOM CSS ANIMATIONS */}
       <style>{`
-@keyframes pulse-slow {
-  0%,100% { opacity:1; }
-  50% { opacity:.7; }
-}
-.animate-pulse-slow {
-  animation: pulse-slow 2s ease-in-out infinite;
-}
+        @keyframes pulse-slow {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.7;
+          }
+        }
+        
+        .animate-pulse-slow {
+          animation: pulse-slow 2s ease-in-out infinite;
+        }
 
-@keyframes smileyBounce {
-  0%,100% { transform: translateY(0px); }
-  50% { transform: translateY(-5px); }
-}
-.smiley-bounce {
-  animation: smileyBounce 2.5s ease-in-out infinite;
-}
+        /* Bounce animation for entire smiley */
+        @keyframes smileyBounce {
+          0%, 100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-5px);
+          }
+        }
 
-@keyframes eyesBlink {
-  0%,90%,100% { transform: scaleY(1); }
-  93% { transform: scaleY(.2); }
-  94%,96% { transform: scaleY(0); }
-  97% { transform: scaleY(.2); }
-}
-.eyes-blink {
-  animation: eyesBlink 3.5s ease-in-out infinite;
-  animation-delay: .5s;
-}
+        /* Synchronized blink for both eyes */
+        @keyframes eyesBlink {
+          0%, 90%, 100% {
+            transform: scaleY(1);
+          }
+          93% {
+            transform: scaleY(0.2);
+          }
+          94%, 96% {
+            transform: scaleY(0);
+          }
+          97% {
+            transform: scaleY(0.2);
+          }
+        }
 
-@keyframes leftEyeWink {
-  0%,90%,100% { transform: scaleY(1); }
-  94%,96% { transform: scaleY(0); }
-}
-.eye-left {
-  animation: leftEyeWink 7s ease-in-out infinite;
-  animation-delay: 2s;
-}
+        /* Left eye wink */
+        @keyframes leftEyeWink {
+          0%, 90%, 100% {
+            transform: scaleY(1);
+          }
+          94%, 96% {
+            transform: scaleY(0);
+          }
+        }
 
-@keyframes rightEyeWink {
-  0%,90%,100% { transform: scaleY(1); }
-  94%,96% { transform: scaleY(0); }
-}
-.eye-right {
-  animation: rightEyeWink 8s ease-in-out infinite;
-  animation-delay: 5s;
-}
+        /* Right eye wink */
+        @keyframes rightEyeWink {
+          0%, 90%, 100% {
+            transform: scaleY(1);
+          }
+          94%, 96% {
+            transform: scaleY(0);
+          }
+        }
 
-.smiley-bounce,
-.smiley-bounce *,
-.eyes-blink,
-.eye-left,
-.eye-right {
-  transition: none !important;
-}
+        /* Apply animations */
+        .smiley-bounce {
+          animation: smileyBounce 2.5s ease-in-out infinite;
+        }
+
+        .eyes-blink {
+          animation: eyesBlink 3.5s ease-in-out infinite;
+          animation-delay: 0.5s;
+        }
+
+        .eye-left {
+          animation: leftEyeWink 7s ease-in-out infinite;
+          animation-delay: 2s;
+        }
+
+        .eye-right {
+          animation: rightEyeWink 8s ease-in-out infinite;
+          animation-delay: 5s;
+        }
+
+        /* Prevent transitions from interfering */
+        .smiley-bounce,
+        .smiley-bounce *,
+        .eyes-blink,
+        .eye-left,
+        .eye-right {
+          transition: none !important;
+        }
       `}</style>
     </div>
   );

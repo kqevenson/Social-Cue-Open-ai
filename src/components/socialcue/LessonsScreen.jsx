@@ -276,7 +276,7 @@ function LessonsScreen({ userData, onNavigate, darkMode }) {
       setShowCelebration(true);
     }
     
-    // Navigate to practice session with the lesson topic
+    // Navigate to lesson with the lesson data
     const lesson = lessons.find(l => l.id === lessonId);
     if (!lesson) {
       console.error('Lesson not found:', lessonId);
@@ -290,8 +290,18 @@ function LessonsScreen({ userData, onNavigate, darkMode }) {
     
     console.log('Starting lesson with topic:', lesson.topic);
     
-    // Navigate to practice home screen
-    onNavigate('practiceHome');
+    // Navigate to AI lesson session with proper sessionId
+    // Map lesson id to session id (1-5 for now)
+    const sessionIdMap = {
+      'small-talk': 1,
+      'active-listening': 2,
+      'body-language': 3,
+      'confidence-building': 4,
+      'conflict-resolution': 5
+    };
+    
+    const mappedSessionId = sessionIdMap[lessonId] || 1;
+    onNavigate('lesson', mappedSessionId);
   };
 
   const handleRestartLesson = (lesson) => {

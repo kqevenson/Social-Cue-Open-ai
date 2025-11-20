@@ -1,6 +1,9 @@
 // speechRecognitionService.js
 
+import { globalTTSLock } from './openAITTSService';
+
 let recognition = null;
+let isRecognitionActive = false;
 let handlers = {
   onInterim: null,
   onFinal: null,
@@ -20,6 +23,11 @@ export function initRecognition() {
   recognition.lang = 'en-US';
 
   recognition.onresult = (event) => {
+    if (globalTTSLock.isSpeaking) {
+      // AI is still talking; ignore speech
+      return;
+    }
+
     let interimTranscript = '';
     let finalTranscript = '';
 
@@ -42,11 +50,15 @@ export function initRecognition() {
   };
 
   recognition.onerror = (event) => {
+    isRecognitionActive = false;
     handlers.onError?.(event.error);
   };
 
   recognition.onend = () => {
-    handlers.onEnd?.();
+    isRecognitionActive = false;
+    if (!globalTTSLock.isSpeaking) {
+      handlers.onEnd?.();
+    }
   };
 
   return recognition;
@@ -58,8 +70,21 @@ export function setHandlers(newHandlers) {
 
 export function startRecognition() {
   if (!recognition) return;
+
+  if (globalTTSLock.isSpeaking) {
+    // Do NOT start listening while TTS is speaking
+    return;
+  }
+
+  // Do not start again if already active
+  if (isRecognitionActive) {
+    console.warn('Recognition already active, not restarting');
+    return;
+  }
+
   try {
     recognition.start();
+    isRecognitionActive = true;
   } catch (e) {
     console.warn('Recognition already started');
   }
@@ -67,5 +92,9 @@ export function startRecognition() {
 
 export function stopRecognition() {
   if (!recognition) return;
-  recognition.stop();
+  try {
+    recognition.stop();
+  } finally {
+    isRecognitionActive = false;
+  }
 }

@@ -252,6 +252,20 @@ function SocialCueApp({ onLogout }) {
           />
         )}
         
+        {/* AI Lesson Session - only for learners */}
+        {currentScreen === 'lesson' && userData?.role !== 'parent' && (
+          <ErrorBoundary darkMode={darkMode} onNavigate={handleNavigate}>
+            <AILessonSession 
+              sessionId={sessionId}
+              onNavigate={handleNavigate} 
+              darkMode={darkMode}
+              gradeLevel={userData.gradeLevel || "6-8"}
+              soundEffects={soundEffects}
+              autoReadText={autoReadText}
+            />
+          </ErrorBoundary>
+        )}
+        
         {currentScreen === 'ai-practice' && (
           <AIPracticeSession 
             gradeLevel={userData.gradeLevel || "6-8"} 

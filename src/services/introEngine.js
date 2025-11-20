@@ -64,7 +64,7 @@ export const introEngine = {
 
     return {
       aiResponse: `Great! Let's try this. Imagine: ${dynamic.spokenScene}. What would you say first?`,
-      nextPhase: "scenario",
+      nextPhase: "intro_preview",
       dynamicScenario: dynamic
     };
   },

@@ -15,7 +15,10 @@ const DEFAULT_VOICE = 'shimmer';
 const SILENT_MP3_DATA_URL =
   'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU3LjgzLjEwMAAAAAAAAAAAAAAA//NAxAAAAANIAAAAABhkbHIAAAAAAAAAAABMYXZmNTcuODMuMTAw//NAxAAAAANIAAAAABxkYXRhAAAAAA==';
 
+export const globalTTSLock = { isSpeaking: false };
+
 let activeAudio = null;
+let activeAudioUrl = null;
 let openAIClient = null;
 let audioUnlocked = false;
 let pendingUnlockPromise = null;
@@ -52,11 +55,17 @@ function getOpenAIClient() {
 function stopOpenAITTSPlayback() {
   if (activeAudio) {
     try {
-      activeAudio.stop(0);
+      activeAudio.pause();
+      activeAudio.src = "";
     } catch (e) {
-      // Buffer source may already be stopped
+      // Ignore
     }
     activeAudio = null;
+  }
+
+  if (activeAudioUrl) {
+    URL.revokeObjectURL(activeAudioUrl);
+    activeAudioUrl = null;
   }
 }
 
@@ -152,38 +161,71 @@ export async function playVoiceResponseWithOpenAI(text, options = {}) {
     throw new Error('OpenAI TTS returned empty audio buffer');
   }
 
-  // Decode MP3 into AudioBuffer
-  const audioBuffer = await ctx.decodeAudioData(audioArrayBuffer.slice(0));
+  const audioBlob = new Blob([audioArrayBuffer], { type: "audio/mpeg" });
+  if (!audioBlob.size) {
+    throw new Error("OpenAI TTS returned invalid audio blob");
+  }
 
   // Stop any existing playback
   stopOpenAITTSPlayback();
 
-  // Create buffer source
-  const source = ctx.createBufferSource();
-  source.buffer = audioBuffer;
+  const audioUrl = URL.createObjectURL(audioBlob);
+  const audio = new Audio(audioUrl);
+  audio.preload = "auto";
 
-  // Connect to destination
-  source.connect(ctx.destination);
+  activeAudio = audio;
+  activeAudioUrl = audioUrl;
 
-  activeAudio = source;
-
-  // Optional callbacks
   options.onLoadStart?.();
-  options.onStart?.();
 
   return new Promise((resolve, reject) => {
-    source.onended = () => {
-      activeAudio = null;
+    const cleanup = () => {
+      audio.onended = null;
+      audio.onerror = null;
+      audio.onplay = null;
+    };
+
+    audio.onplay = () => {
+      globalTTSLock.isSpeaking = true;
+      options.onAudioStart?.();
+      options.onStart?.();
+    };
+
+    audio.onended = () => {
+      globalTTSLock.isSpeaking = false;
+      cleanup();
+      stopOpenAITTSPlayback();
+      options.onAudioComplete?.();
       options.onEnded?.();
       resolve();
     };
 
-    try {
-      source.start(0);
-    } catch (err) {
-      activeAudio = null;
-      options.onError?.(err);
-      reject(err);
+    audio.onerror = (event) => {
+      globalTTSLock.isSpeaking = false;
+      cleanup();
+      stopOpenAITTSPlayback();
+      const error =
+        event?.error || new Error("Audio playback failed");
+      options.onError?.(error);
+      reject(error);
+    };
+
+    const startPlayback = () => {
+      const playPromise = audio.play();
+      if (playPromise?.catch) {
+        playPromise.catch((err) => {
+          cleanup();
+          stopOpenAITTSPlayback();
+          options.onError?.(err);
+          reject(err);
+        });
+      }
+    };
+
+    if (audio.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
+      startPlayback();
+    } else {
+      audio.addEventListener("canplaythrough", startPlayback, { once: true });
     }
   });
 }
